@@ -27,6 +27,7 @@ model User {
   profiles      PetProfile[]
   reservations  Reservation[]
   messages      Message[]
+  notes         Note[]
 }
 
 enum UserRole {

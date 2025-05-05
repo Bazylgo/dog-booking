@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client"
+import prisma from '@/lib/prisma';
 
 /**
  * This script can be used to set up the database with Neon
@@ -6,8 +6,6 @@ import { PrismaClient } from "@prisma/client"
  */
 
 async function main() {
-  // Create a new Prisma Client instance
-  const prisma = new PrismaClient()
 
   try {
     console.log("Starting database setup...")
