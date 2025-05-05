@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and profile information
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?   // Hashed password (null if using OAuth)
+  name          String?
+  surname       String?
+  phone         String?
+  address       String?
+  city          String?
+  postalCode    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  role          UserRole  @default(USER)
+
+  // Relations
+  profiles      PetProfile[]
+  reservations  Reservation[]
+  messages      Message[]
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+// Pet profile model
+model PetProfile {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  type        PetType
+  weight      String
+  sex         String
+  age         String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  isActive    Boolean   @default(true)
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservationPets ReservationPet[]
+}
+
+enum PetType {
+  DOG
+  CAT
+}
+
+// Service model for different service types and their pricing
+model Service {
+  id                String    @id @default(cuid())
+  name              String    @unique
+  description       String?
+  basePrice         Float     // Base price for first pet
+  additionalAnimal  Float     // Additional price per extra pet
+  timeSurcharge     Float     // Surcharge for services outside normal hours
+  additionalTime    Float     // Price for additional 30 minutes
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  isActive          Boolean   @default(true)
+
+  // Relations
+  reservations      Reservation[]
+}
+
+// Reservation model
+model Reservation {
+  id                String    @id @default(cuid())
+  userId            String
+  serviceId         String
+  status            ReservationStatus @default(PENDING)
+  totalCost         Float
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [userId], references: [id])
+  service           Service   @relation(fields: [serviceId], references: [id])
+  pets              ReservationPet[]
+  serviceDates      ServiceDate[]
+  payments          Payment[]
+  notes             Note[]
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Junction table for reservations and pets
+model ReservationPet {
+  id            String    @id @default(cuid())
+  reservationId String
+  petProfileId  String
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  petProfile    PetProfile  @relation(fields: [petProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([reservationId, petProfileId])
+}
+
+// Service dates for each reservation
+model ServiceDate {
+  id            String    @id @default(cuid())
+  reservationId String
+  date          DateTime
+  isSpecialDay  Boolean   @default(false) // Weekend or holiday
+
+  // For all service types
+  serviceTimes  ServiceTime[]
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+}
+
+// Service times for each service date
+model ServiceTime {
+  id            String    @id @default(cuid())
+  serviceDateId String
+  startTime     String    // Format: "HH:MM"
+  duration      Int       // Duration in minutes
+  isOutsideNormalHours Boolean @default(false)
+
+  // Relations
+  serviceDate   ServiceDate @relation(fields: [serviceDateId], references: [id], onDelete: Cascade)
+}
+
+// Payment model
+model Payment {
+  id            String    @id @default(cuid())
+  reservationId String
+  amount        Float
+  status        PaymentStatus
+  method        String?
+  transactionId String?
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// Notes for reservations (admin or user notes)
+model Note {
+  id            String    @id @default(cuid())
+  reservationId String
+  userId        String
+  content       String
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Chat messages
+model Message {
+  id            String    @id @default(cuid())
+  userId        String
+  content       String
+  isRead        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Holiday dates
+model Holiday {
+  id            String    @id @default(cuid())
+  date          DateTime  @unique
+  name          String?
+  createdAt     DateTime  @default(now())
+}
+
+// System settings
+model Setting {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  value         String
+  description   String?
+  updatedAt     DateTime  @updatedAt
+}
