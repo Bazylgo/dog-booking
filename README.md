@@ -30,7 +30,7 @@ This project uses Prisma with a PostgreSQL database (Neon). Follow these steps t
    \`\`\`
 4. Seed the database with initial data:
    \`\`\`bash
-   npx ts-node lib/setup-database.ts
+   node lib/setup-database.js
    \`\`\`
    
 Alternatively, you can use the API route to seed the database:
