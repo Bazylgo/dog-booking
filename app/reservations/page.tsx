@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TimePickerInput } from "@/components/time-picker-input"
 import { Badge } from "@/components/ui/badge"
@@ -63,7 +62,7 @@ const PRICES = {
     additionalAnimal: 61, // 20 zł for 2nd animal
     timeSurcharge: 10, // Before 8 AM/after 8 PM
     basePriceCat: 71,
-    additionalCat: 39
+    additionalCat: 39,
   },
   "Wyzyta Domowa": {
     basePrice: 45, // 40 zł for 30 min (1st animal)
@@ -72,7 +71,7 @@ const PRICES = {
     additionalAnimal: 25, // 20 zł for 2nd animal
     timeSurcharge: 10, // Before 8 AM/after 8 PM
     basePriceCat: 40,
-    additionalCat: 15
+    additionalCat: 15,
   },
   Spacer: {
     basePrice: 41, // 40 zł for 30 min (1st animal)
@@ -81,7 +80,7 @@ const PRICES = {
     additionalAnimal: 21, // 20 zł for 2nd animal
     timeSurcharge: 10, // Before 8 AM/after 8 PM
     basePriceCat: 20,
-    additionalCat: 10
+    additionalCat: 10,
   },
 }
 
@@ -404,7 +403,7 @@ export default function ReservationPage() {
         totalCost += baseCost
         breakdown.push({
           description: `${nights - specialDayCount} night(s) for first pet on regular days`,
-          amount: baseCost
+          amount: baseCost,
         })
       }
 
@@ -414,7 +413,7 @@ export default function ReservationPage() {
         totalCost += specialDayCost
         breakdown.push({
           description: `${specialDayCount} night(s) for first pet on weekend/holiday`,
-          amount: specialDayCost
+          amount: specialDayCost,
         })
       }
 
@@ -495,9 +494,9 @@ export default function ReservationPage() {
 
           if (isSpecial) {
             totalSpecialCost += servicePrice.weekendHoliday * slotDurationMultiplier
-            totalSpecialCostAdditionalPet += servicePrice.additionalAnimal * 1.2 * slotDurationMultiplier * (pets.length - 1)
+            totalSpecialCostAdditionalPet +=
+              servicePrice.additionalAnimal * 1.2 * slotDurationMultiplier * (pets.length - 1)
             specialDayDurationMultiplier += slotDurationMultiplier
-
           } else {
             totalRegularCost += servicePrice.basePrice * slotDurationMultiplier
             totalRegularCostAdditionalPet += servicePrice.additionalAnimal * slotDurationMultiplier * (pets.length - 1)
@@ -526,7 +525,6 @@ export default function ReservationPage() {
 
       // Additional pets
       if (pets.length > 1) {
-
         // Count regular and special days
         let regularDayCount = 0
         let specialDayCount = 0
@@ -559,7 +557,7 @@ export default function ReservationPage() {
         if (specialDayCount > 0) {
           totalCost += totalSpecialCostAdditionalPet
           breakdown.push({
-            description: `${pets.length - 1} additional pet(s) for ${specialDayCount} weekend/holiday(s): ${pets.length - 1}*${specialDayDurationMultiplier}*${servicePrice.additionalAnimal * 1.2.toFixed(2)} zł`,
+            description: `${pets.length - 1} additional pet(s) for ${specialDayCount} weekend/holiday(s): ${pets.length - 1}*${specialDayDurationMultiplier}*${servicePrice.additionalAnimal * (1.2).toFixed(2)} zł`,
             amount: totalSpecialCostAdditionalPet,
           })
         }
@@ -611,7 +609,7 @@ export default function ReservationPage() {
     distance,
   ])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormSubmitted(true)
 
@@ -653,14 +651,67 @@ export default function ReservationPage() {
       userInfo: isUserRegistered ? { registered: true } : userInfo,
       pets,
       service: selectedService,
-      dates: selectedService === "Nocleg" ? { startDate, endDate, pickupTime, dropoffTime } : { datesWithTimes },
+      dates:
+        selectedService === "Nocleg"
+          ? {
+              startDate: startDate ? format(startDate, "yyyy-MM-dd") : null,
+              endDate: endDate ? format(endDate, "yyyy-MM-dd") : null,
+              pickupTime,
+              dropoffTime,
+            }
+          : {
+              datesWithTimes: datesWithTimes.map((dateWithTime) => ({
+                ...dateWithTime,
+                date: format(dateWithTime.date, "yyyy-MM-dd"),
+              })),
+            },
       cost: calculateCost.totalCost,
     }
 
-    console.log("Reservation data:", reservationData)
-    // Here you would send this data to your backend
+    try {
+      // Show loading state
+      setIsSaving(true)
 
-    alert("Reservation submitted successfully!")
+      // Send data to API
+      const response = await fetch("/api/reservations/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reservationData),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to save reservation")
+      }
+
+      // Success - with a note if calendar failed
+      if (result.calendarSuccess === false) {
+        alert(
+          "Reservation submitted successfully! Your booking has been saved to our database, but could not be added to our calendar. Our staff will handle this manually.",
+        )
+      } else {
+        alert("Reservation submitted successfully! Your booking has been added to our calendar.")
+      }
+
+      // Store the user's email in localStorage for the bookings page
+      if (userInfo.email) {
+        localStorage.setItem("userEmail", userInfo.email)
+      }
+
+      // Redirect to the bookings page
+      window.location.href = "/bookings"
+
+      // Reset form or redirect to confirmation page
+      // You could add code here to reset the form or redirect
+    } catch (error) {
+      console.error("Error saving reservation:", error)
+      alert(`Failed to submit reservation: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleTabChange = (value: string) => {
@@ -1476,8 +1527,15 @@ export default function ReservationPage() {
                   <Button type="button" variant="outline" onClick={() => setActiveTab("service")}>
                     Back to Service & Dates
                   </Button>
-                  <Button type="submit" className="bg-orange-600 hover:bg-orange-700">
-                    Complete Reservation
+                  <Button type="submit" className="bg-orange-600 hover:bg-orange-700" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Saving Reservation...
+                      </>
+                    ) : (
+                      "Complete Reservation"
+                    )}
                   </Button>
                 </div>
               </div>

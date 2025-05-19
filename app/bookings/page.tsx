@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { format } from "date-fns"
+import { format, addDays } from "date-fns"
 import {
-  Calendar,
+  CalendarIcon,
   Clock,
   Dog,
   Cat,
@@ -20,6 +20,7 @@ import {
   Edit,
   X,
   Check,
+  CalendarIcon as CalendarLucide,
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -33,200 +34,48 @@ import {
 } from "@/components/ui/dialog"
 import { TimePickerInput } from "@/components/time-picker-input"
 import { Label } from "@/components/ui/label"
-
-// Mock data for demonstration
-const MOCK_RESERVATIONS = [
-  {
-    id: "res_1",
-    status: "CONFIRMED",
-    createdAt: new Date("2025-05-01T10:30:00"),
-    totalCost: 240,
-    service: {
-      id: "svc_1",
-      name: "Spacer",
-    },
-    pets: [
-      {
-        petProfile: {
-          id: "pet_1",
-          name: "Max",
-          type: "DOG",
-          weight: "16-25 kg",
-        },
-      },
-      {
-        petProfile: {
-          id: "pet_2",
-          name: "Bella",
-          type: "DOG",
-          weight: "<5 kg",
-        },
-      },
-    ],
-    serviceDates: [
-      {
-        id: "date_1",
-        date: new Date("2025-05-10"),
-        isSpecialDay: false,
-        serviceTimes: [
-          {
-            id: "time_1",
-            startTime: "10:00",
-            duration: 60,
-            isOutsideNormalHours: false,
-          },
-          {
-            id: "time_2",
-            startTime: "16:00",
-            duration: 60,
-            isOutsideNormalHours: false,
-          },
-        ],
-      },
-      {
-        id: "date_2",
-        date: new Date("2025-05-11"),
-        isSpecialDay: true,
-        serviceTimes: [
-          {
-            id: "time_3",
-            startTime: "10:00",
-            duration: 60,
-            isOutsideNormalHours: false,
-          },
-          {
-            id: "time_4",
-            startTime: "16:00",
-            duration: 60,
-            isOutsideNormalHours: false,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "res_2",
-    status: "PENDING",
-    createdAt: new Date("2025-05-02T14:15:00"),
-    totalCost: 350,
-    service: {
-      id: "svc_2",
-      name: "Nocleg",
-    },
-    pets: [
-      {
-        petProfile: {
-          id: "pet_1",
-          name: "Max",
-          type: "DOG",
-          weight: "16-25 kg",
-        },
-      },
-    ],
-    serviceDates: [
-      {
-        id: "date_3",
-        date: new Date("2025-05-15"),
-        isSpecialDay: false,
-        serviceTimes: [
-          {
-            id: "time_5",
-            startTime: "14:00", // Check-in time
-            duration: 0,
-            isOutsideNormalHours: false,
-          },
-        ],
-      },
-      {
-        id: "date_4",
-        date: new Date("2025-05-18"),
-        isSpecialDay: false,
-        serviceTimes: [
-          {
-            id: "time_6",
-            startTime: "12:00", // Check-out time
-            duration: 0,
-            isOutsideNormalHours: false,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "res_3",
-    status: "COMPLETED",
-    createdAt: new Date("2025-04-15T09:00:00"),
-    totalCost: 180,
-    service: {
-      id: "svc_3",
-      name: "Wyzyta Domowa",
-    },
-    pets: [
-      {
-        petProfile: {
-          id: "pet_3",
-          name: "Luna",
-          type: "CAT",
-          weight: "<5 kg",
-        },
-      },
-    ],
-    serviceDates: [
-      {
-        id: "date_5",
-        date: new Date("2025-04-20"),
-        isSpecialDay: true,
-        serviceTimes: [
-          {
-            id: "time_7",
-            startTime: "11:00",
-            duration: 60,
-            isOutsideNormalHours: false,
-          },
-        ],
-      },
-      {
-        id: "date_6",
-        date: new Date("2025-04-21"),
-        isSpecialDay: true,
-        serviceTimes: [
-          {
-            id: "time_8",
-            startTime: "11:00",
-            duration: 60,
-            isOutsideNormalHours: false,
-          },
-        ],
-      },
-    ],
-  },
-]
+import { Calendar } from "@/app/reservations/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 export default function BookingsPage() {
   const [reservations, setReservations] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("upcoming")
   const [selectedReservation, setSelectedReservation] = useState<any | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingTimeSlot, setEditingTimeSlot] = useState<any | null>(null)
   const [newTime, setNewTime] = useState("")
+  const [newDate, setNewDate] = useState<Date | undefined>(undefined)
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
+  const [isNoclegEditMode, setIsNoclegEditMode] = useState(false)
+  const [checkInDate, setCheckInDate] = useState<Date | undefined>(undefined)
+  const [checkOutDate, setCheckOutDate] = useState<Date | undefined>(undefined)
+  const [checkInTime, setCheckInTime] = useState("")
+  const [checkOutTime, setCheckOutTime] = useState("")
 
   useEffect(() => {
-    // Simulate API call to fetch reservations
+    // Fetch reservations from the API
     const fetchReservations = async () => {
       setIsLoading(true)
+      setError(null)
       try {
-        // In a real app, you would fetch from your API
-        // const response = await fetch('/api/reservations?userId=current');
-        // const data = await response.json();
+        // Get user email from localStorage or session - in a real app, this would come from auth
+        const userEmail = localStorage.getItem("userEmail") || "user@example.com"
 
-        // Using mock data for demonstration
-        setTimeout(() => {
-          setReservations(MOCK_RESERVATIONS)
-          setIsLoading(false)
-        }, 1000)
-      } catch (error) {
-        console.error("Error fetching reservations:", error)
+        const response = await fetch(`/api/bookings?email=${encodeURIComponent(userEmail)}`)
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch reservations: ${response.statusText}`)
+        }
+
+        const data = await response.json()
+        setReservations(data.reservations)
+      } catch (err) {
+        console.error("Error fetching reservations:", err)
+        setError(err instanceof Error ? err.message : "Failed to load reservations")
+      } finally {
         setIsLoading(false)
       }
     }
@@ -234,7 +83,9 @@ export default function BookingsPage() {
     fetchReservations()
   }, [])
 
-  const upcomingReservations = reservations.filter((res) => res.status === "CONFIRMED" || res.status === "PENDING")
+  const upcomingReservations = reservations.filter(
+    (res) => res.status === "CONFIRMED" || res.status === "PENDING" || res.status === "IN_PROGRESS",
+  )
 
   const pastReservations = reservations.filter((res) => res.status === "COMPLETED" || res.status === "CANCELLED")
 
@@ -244,6 +95,8 @@ export default function BookingsPage() {
         return <Badge className="bg-green-500">Confirmed</Badge>
       case "PENDING":
         return <Badge className="bg-yellow-500">Pending</Badge>
+      case "IN_PROGRESS":
+        return <Badge className="bg-blue-500">In Progress</Badge>
       case "COMPLETED":
         return <Badge className="bg-blue-500">Completed</Badge>
       case "CANCELLED":
@@ -270,53 +123,177 @@ export default function BookingsPage() {
     setSelectedReservation(reservation)
   }
 
-  const handleEditTimeSlot = (dateId: string, timeSlot: any) => {
+  const handleEditTimeSlot = (dateId: string, timeSlot: any, date: Date) => {
     setEditingTimeSlot({
       dateId,
       timeSlot,
     })
     setNewTime(timeSlot.startTime)
+    setNewDate(new Date(date))
+    setIsNoclegEditMode(false)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleEditNocleg = (reservation: any) => {
+    if (reservation.serviceDates.length < 2) return
+
+    const checkInDateObj = new Date(reservation.serviceDates[0].date)
+    const checkOutDateObj = new Date(reservation.serviceDates[1].date)
+
+    setCheckInDate(checkInDateObj)
+    setCheckOutDate(checkOutDateObj)
+    setCheckInTime(reservation.serviceDates[0].serviceTimes[0]?.startTime || "12:00")
+    setCheckOutTime(reservation.serviceDates[1].serviceTimes[0]?.startTime || "12:00")
+
+    setSelectedReservation(reservation)
+    setIsNoclegEditMode(true)
     setIsEditDialogOpen(true)
   }
 
   const handleSaveTimeChange = async () => {
-    if (!editingTimeSlot || !selectedReservation) return
+    if (!editingTimeSlot || !selectedReservation || !newDate) return
 
-    // In a real app, you would call your API to update the time slot
-    // await fetch(`/api/reservations/${selectedReservation.id}/times/${editingTimeSlot.timeSlot.id}`, {
-    //   method: 'PATCH',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ startTime: newTime }),
-    // });
+    setIsLoading(true)
+    try {
+      // Call API to update the time slot
+      const response = await fetch(`/api/bookings/update-time`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timeId: editingTimeSlot.timeSlot.id,
+          dateId: editingTimeSlot.dateId,
+          startTime: newTime,
+          date: newDate.toISOString(),
+          isOutsideNormalHours: isOutsideNormalHours(newTime),
+        }),
+      })
 
-    // Update the local state to reflect the change
-    const updatedReservation = {
-      ...selectedReservation,
-      serviceDates: selectedReservation.serviceDates.map((date: any) => {
-        if (date.id === editingTimeSlot.dateId) {
-          return {
-            ...date,
-            serviceTimes: date.serviceTimes.map((time: any) => {
-              if (time.id === editingTimeSlot.timeSlot.id) {
-                return {
-                  ...time,
-                  startTime: newTime,
-                  isOutsideNormalHours: isOutsideNormalHours(newTime),
+      if (!response.ok) {
+        throw new Error("Failed to update time slot")
+      }
+
+      // Update the local state to reflect the change
+      const updatedReservation = {
+        ...selectedReservation,
+        serviceDates: selectedReservation.serviceDates.map((date: any) => {
+          if (date.id === editingTimeSlot.dateId) {
+            return {
+              ...date,
+              date: newDate,
+              serviceTimes: date.serviceTimes.map((time: any) => {
+                if (time.id === editingTimeSlot.timeSlot.id) {
+                  return {
+                    ...time,
+                    startTime: newTime,
+                    isOutsideNormalHours: isOutsideNormalHours(newTime),
+                  }
                 }
-              }
-              return time
-            }),
+                return time
+              }),
+            }
           }
-        }
-        return date
-      }),
+          return date
+        }),
+      }
+
+      setSelectedReservation(updatedReservation)
+      setReservations(reservations.map((res) => (res.id === selectedReservation.id ? updatedReservation : res)))
+
+      // Send email notification
+      await sendEmailNotification(selectedReservation.id, "update")
+
+      setIsEditDialogOpen(false)
+      setEditingTimeSlot(null)
+    } catch (error) {
+      console.error("Error updating time slot:", error)
+      alert("Failed to update time slot")
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    setSelectedReservation(updatedReservation)
-    setReservations(reservations.map((res) => (res.id === selectedReservation.id ? updatedReservation : res)))
+  const handleSaveNoclegChange = async () => {
+    if (!selectedReservation || !checkInDate || !checkOutDate) return
 
-    setIsEditDialogOpen(false)
-    setEditingTimeSlot(null)
+    setIsLoading(true)
+    try {
+      // Call API to update the Nocleg reservation
+      const response = await fetch(`/api/bookings/update-nocleg`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservationId: selectedReservation.id,
+          checkInDate: checkInDate.toISOString(),
+          checkOutDate: checkOutDate.toISOString(),
+          checkInTime,
+          checkOutTime,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update reservation")
+      }
+
+      const result = await response.json()
+
+      // Update the local state to reflect the change
+      const updatedReservation = {
+        ...selectedReservation,
+        serviceDates: [
+          {
+            ...selectedReservation.serviceDates[0],
+            date: checkInDate,
+            serviceTimes: [
+              {
+                ...selectedReservation.serviceDates[0].serviceTimes[0],
+                startTime: checkInTime,
+              },
+            ],
+          },
+          {
+            ...selectedReservation.serviceDates[1],
+            date: checkOutDate,
+            serviceTimes: [
+              {
+                ...selectedReservation.serviceDates[1].serviceTimes[0],
+                startTime: checkOutTime,
+              },
+            ],
+          },
+        ],
+      }
+
+      setSelectedReservation(updatedReservation)
+      setReservations(reservations.map((res) => (res.id === selectedReservation.id ? updatedReservation : res)))
+
+      // Send email notification
+      await sendEmailNotification(selectedReservation.id, "update")
+
+      setIsEditDialogOpen(false)
+      setIsNoclegEditMode(false)
+    } catch (error) {
+      console.error("Error updating Nocleg reservation:", error)
+      alert("Failed to update reservation")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Update the sendEmailNotification function to not require an email parameter
+  const sendEmailNotification = async (reservationId: string, type: "create" | "update") => {
+    try {
+      await fetch("/api/notifications/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservationId,
+          type,
+        }),
+      })
+    } catch (error) {
+      console.error("Error sending email notification:", error)
+      // Don't fail the whole operation if email fails
+    }
   }
 
   // Check if a time is outside normal hours (before 8 AM or after 8 PM)
@@ -331,6 +308,18 @@ export default function BookingsPage() {
 
   const isNoclegService = (reservation: any) => {
     return reservation?.service?.name === "Nocleg"
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   return (
@@ -405,7 +394,7 @@ export default function BookingsPage() {
                           <div className="flex flex-wrap gap-2">
                             {isNoclegService(reservation) ? (
                               <div className="flex items-center gap-1">
-                                <Calendar size={14} className="text-muted-foreground" />
+                                <CalendarLucide size={14} className="text-muted-foreground" />
                                 <span>
                                   {format(new Date(reservation.serviceDates[0].date), "MMM d")} -{" "}
                                   {format(
@@ -416,7 +405,7 @@ export default function BookingsPage() {
                               </div>
                             ) : (
                               <div className="flex items-center gap-1">
-                                <Calendar size={14} className="text-muted-foreground" />
+                                <CalendarLucide size={14} className="text-muted-foreground" />
                                 <span>
                                   {reservation.serviceDates.length} day(s), next:{" "}
                                   {format(new Date(reservation.serviceDates[0].date), "MMM d, yyyy")}
@@ -479,7 +468,7 @@ export default function BookingsPage() {
                           <div className="flex flex-wrap gap-2">
                             {isNoclegService(reservation) ? (
                               <div className="flex items-center gap-1">
-                                <Calendar size={14} className="text-muted-foreground" />
+                                <CalendarLucide size={14} className="text-muted-foreground" />
                                 <span>
                                   {format(new Date(reservation.serviceDates[0].date), "MMM d")} -{" "}
                                   {format(
@@ -490,7 +479,7 @@ export default function BookingsPage() {
                               </div>
                             ) : (
                               <div className="flex items-center gap-1">
-                                <Calendar size={14} className="text-muted-foreground" />
+                                <CalendarLucide size={14} className="text-muted-foreground" />
                                 <span>
                                   {reservation.serviceDates.length} day(s), last:{" "}
                                   {format(
@@ -555,9 +544,9 @@ export default function BookingsPage() {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="font-medium">Schedule</h3>
-                  {canEditReservation(selectedReservation) && !isNoclegService(selectedReservation) && (
+                  {canEditReservation(selectedReservation) && (
                     <Badge variant="outline" className="bg-orange-50 border-orange-200 text-orange-700">
-                      Click on a time to edit
+                      {isNoclegService(selectedReservation) ? "Click Edit to change dates" : "Click on a time to edit"}
                     </Badge>
                   )}
                 </div>
@@ -567,20 +556,22 @@ export default function BookingsPage() {
                     <div className="space-y-2">
                       <div className="p-3 bg-muted rounded-md">
                         <div className="flex items-center gap-2 mb-1">
-                          <Calendar size={16} className="text-muted-foreground" />
+                          <CalendarLucide size={16} className="text-muted-foreground" />
                           <span className="font-medium">
                             {format(new Date(selectedReservation.serviceDates[0].date), "EEEE, MMMM d, yyyy")}
                           </span>
                         </div>
                         <div className="ml-6 flex items-center gap-2">
                           <Clock size={14} className="text-muted-foreground" />
-                          <span>Check-in: {selectedReservation.serviceDates[0].serviceTimes[0].startTime}</span>
+                          <span>
+                            Check-in: {selectedReservation.serviceDates[0].serviceTimes[0]?.startTime || "12:00"}
+                          </span>
                         </div>
                       </div>
 
                       <div className="p-3 bg-muted rounded-md">
                         <div className="flex items-center gap-2 mb-1">
-                          <Calendar size={16} className="text-muted-foreground" />
+                          <CalendarLucide size={16} className="text-muted-foreground" />
                           <span className="font-medium">
                             {format(
                               new Date(
@@ -594,20 +585,27 @@ export default function BookingsPage() {
                           <Clock size={14} className="text-muted-foreground" />
                           <span>
                             Check-out:{" "}
-                            {
-                              selectedReservation.serviceDates[selectedReservation.serviceDates.length - 1]
-                                .serviceTimes[0].startTime
-                            }
+                            {selectedReservation.serviceDates[selectedReservation.serviceDates.length - 1]
+                              .serviceTimes[0]?.startTime || "12:00"}
                           </span>
                         </div>
                       </div>
+
+                      {canEditReservation(selectedReservation) && (
+                        <Button
+                          className="w-full mt-2 bg-orange-600 hover:bg-orange-700"
+                          onClick={() => handleEditNocleg(selectedReservation)}
+                        >
+                          <Edit size={16} className="mr-2" /> Edit Stay Dates
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {selectedReservation.serviceDates.map((date: any) => (
                         <div key={date.id} className="p-3 bg-muted rounded-md">
                           <div className="flex items-center gap-2 mb-2">
-                            <Calendar size={16} className="text-muted-foreground" />
+                            <CalendarLucide size={16} className="text-muted-foreground" />
                             <span className="font-medium">{format(new Date(date.date), "EEEE, MMMM d, yyyy")}</span>
                             {date.isSpecialDay && (
                               <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
@@ -624,7 +622,7 @@ export default function BookingsPage() {
                                 }`}
                                 onClick={() => {
                                   if (canEditReservation(selectedReservation)) {
-                                    handleEditTimeSlot(date.id, time)
+                                    handleEditTimeSlot(date.id, time, new Date(date.date))
                                   }
                                 }}
                               >
@@ -657,8 +655,8 @@ export default function BookingsPage() {
                     <AlertTitle className="text-blue-800">Need to make changes?</AlertTitle>
                     <AlertDescription className="text-blue-700">
                       {isNoclegService(selectedReservation)
-                        ? "For changes to your overnight stay, please contact us directly."
-                        : "You can edit the time of your appointments by clicking on them."}
+                        ? "You can edit your check-in and check-out dates and times."
+                        : "You can edit the date and time of your appointments by clicking on them."}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -668,23 +666,43 @@ export default function BookingsPage() {
         </Dialog>
       )}
 
-      {/* Edit Time Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      {/* Edit Time and Date Dialog */}
+      <Dialog open={isEditDialogOpen && !isNoclegEditMode} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Appointment Time</DialogTitle>
-            <DialogDescription>
-              Change the time for your appointment on{" "}
-              {editingTimeSlot &&
-                selectedReservation &&
-                format(
-                  new Date(selectedReservation.serviceDates.find((d: any) => d.id === editingTimeSlot.dateId).date),
-                  "EEEE, MMMM d, yyyy",
-                )}
-            </DialogDescription>
+            <DialogTitle>Edit Appointment</DialogTitle>
+            <DialogDescription>Change the date and time for your appointment</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-date">New Date</Label>
+              <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn("w-full justify-start text-left font-normal", !newDate && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {newDate ? format(newDate, "PPP") : "Select date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    onDateSelect={(dates) => {
+                      if (dates.length > 0) {
+                        setNewDate(dates[0])
+                        setIsDatePickerOpen(false)
+                      }
+                    }}
+                    selectedDates={newDate ? [newDate] : []}
+                    blockedDates={[]}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="edit-time">New Time</Label>
               <TimePickerInput id="edit-time" value={newTime} onChange={setNewTime} />
@@ -711,9 +729,149 @@ export default function BookingsPage() {
               type="button"
               onClick={handleSaveTimeChange}
               className="bg-orange-600 hover:bg-orange-700 flex items-center gap-1"
+              disabled={isLoading || !newDate}
             >
-              <Check size={16} />
-              Save Changes
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin mr-1" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check size={16} />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Nocleg Dialog */}
+      <Dialog
+        open={isEditDialogOpen && isNoclegEditMode}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open)
+          if (!open) setIsNoclegEditMode(false)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Stay Dates</DialogTitle>
+            <DialogDescription>Change your check-in and check-out dates and times</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Check-in Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !checkInDate && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {checkInDate ? format(checkInDate, "PPP") : "Select date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    onDateSelect={(dates) => {
+                      if (dates.length > 0) {
+                        setCheckInDate(dates[0])
+                        // If check-out date is before check-in date, update it
+                        if (checkOutDate && dates[0] > checkOutDate) {
+                          setCheckOutDate(addDays(dates[0], 1))
+                        }
+                      }
+                    }}
+                    selectedDates={checkInDate ? [checkInDate] : []}
+                    blockedDates={[]}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Check-in Time</Label>
+              <TimePickerInput value={checkInTime} onChange={setCheckInTime} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Check-out Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !checkOutDate && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {checkOutDate ? format(checkOutDate, "PPP") : "Select date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    onDateSelect={(dates) => {
+                      if (dates.length > 0 && checkInDate) {
+                        // Ensure check-out date is after check-in date
+                        if (dates[0] > checkInDate) {
+                          setCheckOutDate(dates[0])
+                        } else {
+                          alert("Check-out date must be after check-in date")
+                        }
+                      }
+                    }}
+                    selectedDates={checkOutDate ? [checkOutDate] : []}
+                    blockedDates={checkInDate ? [checkInDate] : []}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Check-out Time</Label>
+              <TimePickerInput value={checkOutTime} onChange={setCheckOutTime} />
+            </div>
+          </div>
+
+          <DialogFooter className="flex space-x-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsEditDialogOpen(false)
+                setIsNoclegEditMode(false)
+              }}
+              className="flex items-center gap-1"
+            >
+              <X size={16} />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveNoclegChange}
+              className="bg-orange-600 hover:bg-orange-700 flex items-center gap-1"
+              disabled={isLoading || !checkInDate || !checkOutDate}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin mr-1" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check size={16} />
+                  Save Changes
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
