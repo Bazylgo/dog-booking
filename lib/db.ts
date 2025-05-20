@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import prisma from 'prisma';
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.

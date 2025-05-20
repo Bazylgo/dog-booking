@@ -77,10 +77,10 @@ export function ChatWidget() {
 
   return (
     <>
-      {/* Chat button */}
+      {/* Chat button - positioned differently on mobile */}
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 rounded-full h-14 w-14 shadow-lg bg-orange-600 hover:bg-orange-700"
+        className="fixed bottom-6 right-6 md:bottom-6 md:right-6 rounded-full h-14 w-14 shadow-lg bg-primary hover:bg-primary-700 z-40"
       >
         <MessageCircle size={24} />
         {unreadCount > 0 && (
@@ -92,8 +92,8 @@ export function ChatWidget() {
 
       {/* Chat window */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-80 sm:w-96 h-96 shadow-xl border-orange-200 z-50">
-          <CardHeader className="bg-orange-600 text-white py-3 px-4">
+        <Card className="fixed bottom-6 right-6 w-80 sm:w-96 h-96 shadow-xl border-primary-200 z-50">
+          <CardHeader className="bg-primary text-white py-3 px-4">
             <div className="flex justify-between items-center">
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Avatar className="h-6 w-6">
@@ -106,7 +106,7 @@ export function ChatWidget() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsOpen(false)}
-                className="h-6 w-6 text-white hover:bg-orange-700 rounded-full"
+                className="h-6 w-6 text-white hover:bg-primary-700 rounded-full"
               >
                 <X size={16} />
               </Button>
@@ -118,7 +118,7 @@ export function ChatWidget() {
                 <div key={msg.id} className={`mb-3 flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-[80%] rounded-lg px-3 py-2 ${
-                      msg.sender === "user" ? "bg-orange-600 text-white" : "bg-gray-100 text-gray-800"
+                      msg.sender === "user" ? "bg-primary text-white" : "bg-gray-100 text-gray-800"
                     }`}
                   >
                     <p className="text-sm">{msg.content}</p>
@@ -154,7 +154,7 @@ export function ChatWidget() {
                 }}
                 className="flex-1"
               />
-              <Button onClick={handleSendMessage} size="icon" className="bg-orange-600 hover:bg-orange-700">
+              <Button onClick={handleSendMessage} size="icon" className="bg-primary hover:bg-primary-700">
                 <Send size={16} />
               </Button>
             </div>

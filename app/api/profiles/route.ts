@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/db"
+import prisma from "@/lib/prisma"
 
 // GET all profiles for a user
 export async function GET(request: Request) {

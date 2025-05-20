@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label"
 import { Calendar } from "@/app/reservations/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/use-toast"
 
 export default function BookingsPage() {
   const [reservations, setReservations] = useState<any[]>([])
@@ -54,33 +55,85 @@ export default function BookingsPage() {
   const [checkOutDate, setCheckOutDate] = useState<Date | undefined>(undefined)
   const [checkInTime, setCheckInTime] = useState("")
   const [checkOutTime, setCheckOutTime] = useState("")
+  const [dateTimeError, setDateTimeError] = useState<string | null>(null)
+
+  const fetchReservations = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      // Get user email from localStorage or session - in a real app, this would come from auth
+      const userEmail = localStorage.getItem("userEmail") || "user@example.com"
+
+      const response = await fetch(`/api/bookings?email=${encodeURIComponent(userEmail)}`)
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch reservations: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      setReservations(data.reservations)
+    } catch (err) {
+      console.error("Error fetching reservations:", err)
+      setError(err instanceof Error ? err.message : "Failed to load reservations")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // Fetch reservations from the API
-    const fetchReservations = async () => {
-      setIsLoading(true)
-      setError(null)
+    fetchReservations()
+  }, [])
+
+  // Validate check-in and check-out dates/times
+  useEffect(() => {
+    if (isNoclegEditMode && checkInDate && checkOutDate && checkInTime && checkOutTime) {
+      const checkInDateTime = new Date(
+        checkInDate.getFullYear(),
+        checkInDate.getMonth(),
+        checkInDate.getDate(),
+        Number.parseInt(checkInTime.split(":")[0]),
+        Number.parseInt(checkInTime.split(":")[1]),
+      )
+
+      const checkOutDateTime = new Date(
+        checkOutDate.getFullYear(),
+        checkOutDate.getMonth(),
+        checkOutDate.getDate(),
+        Number.parseInt(checkOutTime.split(":")[0]),
+        Number.parseInt(checkOutTime.split(":")[1]),
+      )
+
+      if (checkOutDateTime <= checkInDateTime) {
+        setDateTimeError("Check-out date/time must be after check-in date/time")
+      } else {
+        setDateTimeError(null)
+      }
+    }
+  }, [checkInDate, checkOutDate, checkInTime, checkOutTime, isNoclegEditMode])
+
+  // Add this useEffect to update reservation statuses when the page loads
+  useEffect(() => {
+    // Function to update reservation statuses
+    const updateReservationStatuses = async () => {
       try {
-        // Get user email from localStorage or session - in a real app, this would come from auth
-        const userEmail = localStorage.getItem("userEmail") || "user@example.com"
-
-        const response = await fetch(`/api/bookings?email=${encodeURIComponent(userEmail)}`)
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch reservations: ${response.statusText}`)
+        const response = await fetch("/api/update-reservation-status")
+        if (response.ok) {
+          // If statuses were updated, refresh the reservations
+          fetchReservations()
         }
-
-        const data = await response.json()
-        setReservations(data.reservations)
-      } catch (err) {
-        console.error("Error fetching reservations:", err)
-        setError(err instanceof Error ? err.message : "Failed to load reservations")
-      } finally {
-        setIsLoading(false)
+      } catch (error) {
+        console.error("Error updating reservation statuses:", error)
       }
     }
 
-    fetchReservations()
+    // Call the function when the page loads
+    updateReservationStatuses()
+
+    // Set up an interval to check for status updates every minute
+    const intervalId = setInterval(updateReservationStatuses, 60000)
+
+    // Clean up the interval when the component unmounts
+    return () => clearInterval(intervalId)
   }, [])
 
   const upcomingReservations = reservations.filter(
@@ -144,6 +197,7 @@ export default function BookingsPage() {
     setCheckOutDate(checkOutDateObj)
     setCheckInTime(reservation.serviceDates[0].serviceTimes[0]?.startTime || "12:00")
     setCheckOutTime(reservation.serviceDates[1].serviceTimes[0]?.startTime || "12:00")
+    setDateTimeError(null)
 
     setSelectedReservation(reservation)
     setIsNoclegEditMode(true)
@@ -169,7 +223,8 @@ export default function BookingsPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to update time slot")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update time slot")
       }
 
       // Update the local state to reflect the change
@@ -199,14 +254,23 @@ export default function BookingsPage() {
       setSelectedReservation(updatedReservation)
       setReservations(reservations.map((res) => (res.id === selectedReservation.id ? updatedReservation : res)))
 
-      // Send email notification
-      await sendEmailNotification(selectedReservation.id, "update")
+      toast({
+        title: "Appointment updated",
+        description: "Your appointment has been successfully updated.",
+      })
 
       setIsEditDialogOpen(false)
       setEditingTimeSlot(null)
+
+      // Refresh reservations to ensure we have the latest data
+      await fetchReservations()
     } catch (error) {
       console.error("Error updating time slot:", error)
-      alert("Failed to update time slot")
+      toast({
+        title: "Update failed",
+        description: error instanceof Error ? error.message : "Failed to update your appointment. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -215,26 +279,51 @@ export default function BookingsPage() {
   const handleSaveNoclegChange = async () => {
     if (!selectedReservation || !checkInDate || !checkOutDate) return
 
+    // Validate that check-out is after check-in
+    const checkInDateTime = new Date(
+      checkInDate.getFullYear(),
+      checkInDate.getMonth(),
+      checkInDate.getDate(),
+      Number.parseInt(checkInTime.split(":")[0]),
+      Number.parseInt(checkInTime.split(":")[1]),
+    )
+
+    const checkOutDateTime = new Date(
+      checkOutDate.getFullYear(),
+      checkOutDate.getMonth(),
+      checkOutDate.getDate(),
+      Number.parseInt(checkOutTime.split(":")[0]),
+      Number.parseInt(checkOutTime.split(":")[1]),
+    )
+
+    if (checkOutDateTime <= checkInDateTime) {
+      setDateTimeError("Check-out date/time must be after check-in date/time")
+      return
+    }
+
     setIsLoading(true)
     try {
+      // Format dates as ISO strings
+      const checkInDateISO = checkInDate.toISOString().split("T")[0]
+      const checkOutDateISO = checkOutDate.toISOString().split("T")[0]
+
       // Call API to update the Nocleg reservation
       const response = await fetch(`/api/bookings/update-nocleg`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reservationId: selectedReservation.id,
-          checkInDate: checkInDate.toISOString(),
-          checkOutDate: checkOutDate.toISOString(),
+          checkInDate: checkInDateISO,
+          checkOutDate: checkOutDateISO,
           checkInTime,
           checkOutTime,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to update reservation")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update reservation")
       }
-
-      const result = await response.json()
 
       // Update the local state to reflect the change
       const updatedReservation = {
@@ -266,33 +355,25 @@ export default function BookingsPage() {
       setSelectedReservation(updatedReservation)
       setReservations(reservations.map((res) => (res.id === selectedReservation.id ? updatedReservation : res)))
 
-      // Send email notification
-      await sendEmailNotification(selectedReservation.id, "update")
+      toast({
+        title: "Stay dates updated",
+        description: "Your stay dates have been successfully updated.",
+      })
 
       setIsEditDialogOpen(false)
       setIsNoclegEditMode(false)
+
+      // Refresh reservations to ensure we have the latest data
+      await fetchReservations()
     } catch (error) {
       console.error("Error updating Nocleg reservation:", error)
-      alert("Failed to update reservation")
+      toast({
+        title: "Update failed",
+        description: error instanceof Error ? error.message : "Failed to update your stay dates. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  // Update the sendEmailNotification function to not require an email parameter
-  const sendEmailNotification = async (reservationId: string, type: "create" | "update") => {
-    try {
-      await fetch("/api/notifications/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reservationId,
-          type,
-        }),
-      })
-    } catch (error) {
-      console.error("Error sending email notification:", error)
-      // Don't fail the whole operation if email fails
     }
   }
 
@@ -328,7 +409,7 @@ export default function BookingsPage() {
 
       {isLoading ? (
         <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#C76E00]" />
         </div>
       ) : (
         <Tabs defaultValue="upcoming" value={activeTab} onValueChange={setActiveTab}>
@@ -341,7 +422,7 @@ export default function BookingsPage() {
             {upcomingReservations.length === 0 ? (
               <div className="text-center py-12 border border-dashed rounded-lg">
                 <p className="text-muted-foreground">You don't have any upcoming reservations.</p>
-                <Button className="mt-4 bg-orange-600 hover:bg-orange-700" asChild>
+                <Button className="mt-4 bg-[#C76E00] hover:bg-[#A55A00]" asChild>
                   <a href="/reservations">Make a Reservation</a>
                 </Button>
               </div>
@@ -349,7 +430,7 @@ export default function BookingsPage() {
               <div className="space-y-4">
                 {upcomingReservations.map((reservation) => (
                   <Card key={reservation.id} className="overflow-hidden">
-                    <CardHeader className="bg-orange-50 py-4">
+                    <CardHeader className="bg-[#FFF8F0] py-4">
                       <div className="flex justify-between items-start">
                         <div>
                           <div className="flex items-center gap-2">
@@ -360,10 +441,10 @@ export default function BookingsPage() {
                           <CardDescription>Booked on {format(new Date(reservation.createdAt), "PPP")}</CardDescription>
                         </div>
                         <div className="text-right">
-                          <div className="font-medium text-orange-600">{reservation.totalCost.toFixed(2)} zł</div>
+                          <div className="font-medium text-[#C76E00]">{reservation.totalCost.toFixed(2)} zł</div>
                           <Button
                             variant="link"
-                            className="p-0 h-auto text-orange-600"
+                            className="p-0 h-auto text-[#C76E00]"
                             onClick={() => handleViewDetails(reservation)}
                           >
                             View Details <ChevronRight size={16} className="ml-1" />
@@ -379,9 +460,9 @@ export default function BookingsPage() {
                             {reservation.pets.map((pet: any) => (
                               <Badge key={pet.petProfile.id} variant="outline" className="flex items-center gap-1">
                                 {pet.petProfile.type === "DOG" ? (
-                                  <Dog size={12} className="text-orange-600" />
+                                  <Dog size={12} className="text-[#C76E00]" />
                                 ) : (
-                                  <Cat size={12} className="text-orange-600" />
+                                  <Cat size={12} className="text-[#C76E00]" />
                                 )}
                                 {pet.petProfile.name}
                               </Badge>
@@ -521,9 +602,9 @@ export default function BookingsPage() {
                   {selectedReservation.pets.map((pet: any) => (
                     <div key={pet.petProfile.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
                       {pet.petProfile.type === "DOG" ? (
-                        <Dog size={16} className="text-orange-600" />
+                        <Dog size={16} className="text-[#C76E00]" />
                       ) : (
-                        <Cat size={16} className="text-orange-600" />
+                        <Cat size={16} className="text-[#C76E00]" />
                       )}
                       <span>
                         {pet.petProfile.name} ({pet.petProfile.weight})
@@ -536,7 +617,7 @@ export default function BookingsPage() {
                 <div className="p-3 bg-orange-50 rounded-md">
                   <div className="flex justify-between font-medium">
                     <span>Total Cost:</span>
-                    <span className="text-orange-600">{selectedReservation.totalCost.toFixed(2)} zł</span>
+                    <span className="text-[#C76E00]">{selectedReservation.totalCost.toFixed(2)} zł</span>
                   </div>
                 </div>
               </div>
@@ -593,7 +674,7 @@ export default function BookingsPage() {
 
                       {canEditReservation(selectedReservation) && (
                         <Button
-                          className="w-full mt-2 bg-orange-600 hover:bg-orange-700"
+                          className="w-full mt-2 bg-[#C76E00] hover:bg-[#A55A00]"
                           onClick={() => handleEditNocleg(selectedReservation)}
                         >
                           <Edit size={16} className="mr-2" /> Edit Stay Dates
@@ -728,7 +809,7 @@ export default function BookingsPage() {
             <Button
               type="button"
               onClick={handleSaveTimeChange}
-              className="bg-orange-600 hover:bg-orange-700 flex items-center gap-1"
+              className="bg-[#C76E00] hover:bg-[#A55A00] flex items-center gap-1"
               disabled={isLoading || !newDate}
             >
               {isLoading ? (
@@ -821,16 +902,11 @@ export default function BookingsPage() {
                     mode="single"
                     onDateSelect={(dates) => {
                       if (dates.length > 0 && checkInDate) {
-                        // Ensure check-out date is after check-in date
-                        if (dates[0] > checkInDate) {
-                          setCheckOutDate(dates[0])
-                        } else {
-                          alert("Check-out date must be after check-in date")
-                        }
+                        setCheckOutDate(dates[0])
                       }
                     }}
                     selectedDates={checkOutDate ? [checkOutDate] : []}
-                    blockedDates={checkInDate ? [checkInDate] : []}
+                    blockedDates={[]}
                   />
                 </PopoverContent>
               </Popover>
@@ -840,6 +916,14 @@ export default function BookingsPage() {
               <Label>Check-out Time</Label>
               <TimePickerInput value={checkOutTime} onChange={setCheckOutTime} />
             </div>
+
+            {dateTimeError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{dateTimeError}</AlertDescription>
+              </Alert>
+            )}
           </div>
 
           <DialogFooter className="flex space-x-2 sm:justify-end">
@@ -858,8 +942,8 @@ export default function BookingsPage() {
             <Button
               type="button"
               onClick={handleSaveNoclegChange}
-              className="bg-orange-600 hover:bg-orange-700 flex items-center gap-1"
-              disabled={isLoading || !checkInDate || !checkOutDate}
+              className="bg-[#C76E00] hover:bg-[#A55A00] flex items-center gap-1"
+              disabled={isLoading || !checkInDate || !checkOutDate || !!dateTimeError}
             >
               {isLoading ? (
                 <>

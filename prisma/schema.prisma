@@ -93,6 +93,7 @@ model Reservation {
   serviceDates      ServiceDate[]
   payments          Payment[]
   notes             Note[]
+  calendarEvents    CalendarEvent[]
 }
 
 enum ReservationStatus {
@@ -140,6 +141,21 @@ model ServiceTime {
 
   // Relations
   serviceDate   ServiceDate @relation(fields: [serviceDateId], references: [id], onDelete: Cascade)
+}
+
+// Calendar events for tracking Google Calendar events
+model CalendarEvent {
+  id            String    @id @default(cuid())
+  reservationId String
+  eventId       String    // Google Calendar event ID
+  eventLink     String    // Link to the event in Google Calendar
+  serviceDateId String?   // Optional link to specific service date
+  serviceTimeId String?   // Optional link to specific service time
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
 }
 
 // Payment model

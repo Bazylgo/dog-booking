@@ -1,221 +1,323 @@
-import { Pool } from "pg"
-import { google } from "googleapis"
 import { NextResponse } from "next/server"
-
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-})
+import prisma from "@/lib/prisma"
+import { sendEmailNotification } from "../../notifications/email/route"
+import { updateCalendar } from "../../calendar/update/route"
 
 export async function POST(request: Request) {
-  const body = await request.json()
-
-  const { userInfo, pets, service, dates, cost } = body
-
   try {
-    // 1. Save to database
-    const dbResult = await pool.query(
-      `INSERT INTO "Reservations" (
-        full_name,
-        email,
-        phone,
-        address,
-        city,
-        postal_code,
-        service_type,
-        total_cost,
-        reservation_data,
-        created_at
+    const data = await request.json()
+
+    // Extract user information
+    const userInfo = data.userInfo
+    const pets = data.pets
+    const service = data.service
+    const dates = data.dates
+    const cost = data.cost
+
+    // Find or create user
+    let user
+    try {
+      // First, try to find the user by email
+      user = await prisma.user.findUnique({
+        where: {
+          email: userInfo.email,
+        },
+      })
+
+      // If user doesn't exist and not registered, create a new one
+      if (!user && !userInfo.registered) {
+        user = await prisma.user.create({
+          data: {
+            email: userInfo.email,
+            name: userInfo.name,
+            surname: userInfo.surname,
+            phone: userInfo.phone,
+            address: userInfo.address,
+            city: userInfo.city,
+            postalCode: userInfo.postalCode,
+          },
+        })
+      } else if (!user && userInfo.registered) {
+        // If user claims to be registered but we can't find them
+        return NextResponse.json({ error: "User account not found" }, { status: 404 })
+      } else {
+        // User exists, update their information if needed
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            name: userInfo.name || user.name,
+            surname: userInfo.surname || user.surname,
+            phone: userInfo.phone || user.phone,
+            address: userInfo.address || user.address,
+            city: userInfo.city || user.city,
+            postalCode: userInfo.postalCode || user.postalCode,
+          },
+        })
+      }
+    } catch (userError) {
+      console.error("Error handling user:", userError)
+      return NextResponse.json(
+        {
+          error: "Failed to process user information",
+          details: userError instanceof Error ? userError.message : String(userError),
+        },
+        { status: 500 },
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id`,
-      [
-        `${userInfo.name} ${userInfo.surname}`,
-        userInfo.email,
-        userInfo.phone,
-        userInfo.address,
-        userInfo.city,
-        userInfo.postalCode,
-        service,
-        cost,
-        JSON.stringify({ pets, dates }),
-        new Date(),
-      ],
-    )
+    }
 
-    const reservationId = dbResult.rows[0].id
+    if (!user) {
+      return NextResponse.json({ error: "Failed to create or find user" }, { status: 500 })
+    }
 
-    // 2. Add to Google Calendar
-    const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
-
-    auth.setCredentials({
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    // Find or create service
+    let serviceRecord = await prisma.service.findUnique({
+      where: { name: service },
     })
 
-    const calendar = google.calendar({ version: "v3", auth })
+    if (!serviceRecord) {
+      // Default values based on service type
+      let basePrice = 40
+      let additionalAnimal = 20
+      let timeSurcharge = 10
+      let additionalTime = 20
 
-    // Format event details based on service type
-    let eventSummary = ""
-    let eventDescription = ""
-    let startDateTime
-    let endDateTime
-
-    if (service === "Nocleg") {
-      // For overnight stays
-      const { startDate, endDate, pickupTime, dropoffTime } = dates
-
-      // Ensure we're working with proper date strings
-      const formattedStartDate =
-        typeof startDate === "string" ? startDate : new Date(startDate).toISOString().split("T")[0]
-      const formattedEndDate = typeof endDate === "string" ? endDate : new Date(endDate).toISOString().split("T")[0]
-
-      // Create proper datetime objects
-      startDateTime = new Date(`${formattedStartDate}T${dropoffTime}:00`)
-      endDateTime = new Date(`${formattedEndDate}T${pickupTime}:00`)
-
-      eventSummary = `Dog Hotel: Nocleg for ${userInfo.name} ${userInfo.surname}`
-      eventDescription = `
-        Service: Overnight Stay
-        Client: ${userInfo.name} ${userInfo.surname}
-        Phone: ${userInfo.phone}
-        Email: ${userInfo.email}
-        Address: ${userInfo.address}, ${userInfo.postalCode} ${userInfo.city}
-        Pets: ${pets.map((p) => `${p.name} (${p.type}, ${p.weight})`).join(", ")}
-        Check-in: ${formattedStartDate} at ${dropoffTime}
-        Check-out: ${formattedEndDate} at ${pickupTime}
-        Total Cost: ${cost.toFixed(2)} zł
-      `
-    } else {
-      // For Spacer or Wyzyta Domowa
-      const { datesWithTimes } = dates
-
-      // Create separate calendar events for each date and time slot
-      for (const dateWithTimes of datesWithTimes) {
-        for (const timeSlot of dateWithTimes.times) {
-          // Calculate duration in minutes
-          let durationMinutes = 30 // Default
-          if (timeSlot.duration === "1 hour") durationMinutes = 60
-          else if (timeSlot.duration === "1.5 hours") durationMinutes = 90
-          else if (timeSlot.duration === "2 hours") durationMinutes = 120
-          else if (timeSlot.duration === "2.5 hours") durationMinutes = 150
-          else if (timeSlot.duration === "3 hours") durationMinutes = 180
-          else if (timeSlot.duration === "3.5 hours") durationMinutes = 210
-          else if (timeSlot.duration === "4 hours") durationMinutes = 240
-          else if (timeSlot.duration.includes("hour")) {
-            const hours = Number.parseFloat(timeSlot.duration)
-            durationMinutes = hours * 60
-          }
-
-          // Ensure we have a proper date object
-          const date = new Date(dateWithTimes.date)
-          const [hours, minutes] = timeSlot.time.split(":").map(Number)
-
-          // Create the start date time
-          startDateTime = new Date(date)
-          startDateTime.setHours(hours, minutes, 0, 0)
-
-          // Create the end date time
-          endDateTime = new Date(startDateTime)
-          endDateTime.setMinutes(endDateTime.getMinutes() + durationMinutes)
-
-          eventSummary = `Dog Hotel: ${service} for ${userInfo.name} ${userInfo.surname}`
-          eventDescription = `
-        Service: ${service}
-        Client: ${userInfo.name} ${userInfo.surname}
-        Phone: ${userInfo.phone}
-        Email: ${userInfo.email}
-        Address: ${userInfo.address}, ${userInfo.postalCode} ${userInfo.city}
-        Pets: ${pets.map((p) => `${p.name} (${p.type}, ${p.weight})`).join(", ")}
-        Duration: ${timeSlot.duration}
-        Reservation ID: ${reservationId}
-        Total Cost: ${cost.toFixed(2)} zł
-      `
-
-          // Check if the date is valid before creating the event
-          if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
-            console.error("Invalid date detected:", {
-              originalDate: dateWithTimes.date,
-              parsedDate: date,
-              startDateTime,
-              endDateTime,
-              timeSlot,
-            })
-            continue // Skip this event if dates are invalid
-          }
-
-          const event = {
-            summary: eventSummary,
-            description: eventDescription,
-            start: {
-              dateTime: startDateTime.toISOString(),
-              timeZone: "Europe/Warsaw",
-            },
-            end: {
-              dateTime: endDateTime.toISOString(),
-              timeZone: "Europe/Warsaw",
-            },
-            location:
-              service === "Wyzyta Domowa"
-                ? `${userInfo.address}, ${userInfo.postalCode} ${userInfo.city}`
-                : "Madalińskiego 67/11, 02-549 Warsaw",
-          }
-
-          await calendar.events.insert({
-            calendarId: process.env.GOOGLE_CALENDAR_ID,
-            requestBody: event,
-          })
-        }
+      if (service === "Nocleg") {
+        basePrice = 91
+        additionalAnimal = 61
+        timeSurcharge = 10
+        additionalTime = 0
+      } else if (service === "Wyzyta Domowa") {
+        basePrice = 45
+        additionalAnimal = 25
+        timeSurcharge = 10
+        additionalTime = 20
       }
 
-      // Return success after creating all events
-      return NextResponse.json({
-        success: true,
-        message: "Reservation saved successfully",
-        reservationId,
+      serviceRecord = await prisma.service.create({
+        data: {
+          name: service,
+          description: `${service} service`,
+          basePrice,
+          additionalAnimal,
+          timeSurcharge,
+          additionalTime,
+        },
       })
     }
 
-    // For Nocleg service, create a single event
-    if (service === "Nocleg") {
-      // Check if the date is valid before creating the event
-      if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
-        console.error("Invalid date detected for Nocleg service:", {
-          startDate,
-          endDate,
-          startDateTime,
-          endDateTime,
-          pickupTime,
-          dropoffTime,
-        })
-        return NextResponse.json({ error: "Invalid date format for reservation" }, { status: 400 })
-      }
-
-      const event = {
-        summary: eventSummary,
-        description: eventDescription,
-        start: {
-          dateTime: startDateTime.toISOString(),
-          timeZone: "Europe/Warsaw",
+    // Create the reservation
+    const reservation = await prisma.$transaction(async (tx) => {
+      // Create the main reservation
+      const newReservation = await tx.reservation.create({
+        data: {
+          userId: user.id,
+          serviceId: serviceRecord.id,
+          totalCost: cost,
+          status: "CONFIRMED",
         },
-        end: {
-          dateTime: endDateTime.toISOString(),
-          timeZone: "Europe/Warsaw",
-        },
-        location: "Madalińskiego 67/11, 02-549 Warsaw",
-      }
-
-      await calendar.events.insert({
-        calendarId: process.env.GOOGLE_CALENDAR_ID,
-        requestBody: event,
       })
+
+      // Create pet profiles and link to reservation
+      for (const pet of pets) {
+        // Create or find pet profile
+        let petProfile = await tx.petProfile.findFirst({
+          where: {
+            userId: user.id,
+            name: pet.name,
+            type: pet.type.toUpperCase() === "CAT" ? "CAT" : "DOG",
+          },
+        })
+
+        if (!petProfile) {
+          petProfile = await tx.petProfile.create({
+            data: {
+              userId: user.id,
+              name: pet.name || "Unnamed Pet",
+              type: pet.type.toUpperCase() === "CAT" ? "CAT" : "DOG",
+              weight: pet.weight,
+              sex: pet.sex,
+              age: pet.age,
+            },
+          })
+        }
+
+        // Link pet to reservation
+        await tx.reservationPet.create({
+          data: {
+            reservationId: newReservation.id,
+            petProfileId: petProfile.id,
+          },
+        })
+      }
+
+      // Process dates based on service type
+      if (service === "Nocleg") {
+        const { startDate, endDate, pickupTime, dropoffTime } = dates
+
+        if (startDate) {
+          // Create check-in date
+          const checkInDate = await tx.serviceDate.create({
+            data: {
+              reservationId: newReservation.id,
+              date: new Date(startDate),
+              isSpecialDay: isWeekendOrHoliday(new Date(startDate)),
+            },
+          })
+
+          // Add check-in time
+          await tx.serviceTime.create({
+            data: {
+              serviceDateId: checkInDate.id,
+              startTime: dropoffTime,
+              duration: 0,
+              isOutsideNormalHours: isOutsideNormalHours(dropoffTime),
+            },
+          })
+        }
+
+        if (endDate) {
+          // Create check-out date
+          const checkOutDate = await tx.serviceDate.create({
+            data: {
+              reservationId: newReservation.id,
+              date: new Date(endDate),
+              isSpecialDay: isWeekendOrHoliday(new Date(endDate)),
+            },
+          })
+
+          // Add check-out time
+          await tx.serviceTime.create({
+            data: {
+              serviceDateId: checkOutDate.id,
+              startTime: pickupTime,
+              duration: 0,
+              isOutsideNormalHours: isOutsideNormalHours(pickupTime),
+            },
+          })
+        }
+      } else {
+        // For Spacer or Wyzyta Domowa
+        const { datesWithTimes } = dates
+
+        for (const dateWithTimes of datesWithTimes) {
+          // Create service date
+          const serviceDate = await tx.serviceDate.create({
+            data: {
+              reservationId: newReservation.id,
+              date: new Date(dateWithTimes.date),
+              isSpecialDay: dateWithTimes.isSpecialDay,
+            },
+          })
+
+          // Add times
+          for (const timeSlot of dateWithTimes.times) {
+            // Parse duration from string like "30 minutes" or "1 hour"
+            let durationMinutes = 30 // Default
+            if (timeSlot.duration) {
+              if (timeSlot.duration === "1 hour") durationMinutes = 60
+              else if (timeSlot.duration === "1.5 hours") durationMinutes = 90
+              else if (timeSlot.duration === "2 hours") durationMinutes = 120
+              else if (timeSlot.duration === "2.5 hours") durationMinutes = 150
+              else if (timeSlot.duration === "3 hours") durationMinutes = 180
+              else if (timeSlot.duration === "3.5 hours") durationMinutes = 210
+              else if (timeSlot.duration === "4 hours") durationMinutes = 240
+            }
+
+            await tx.serviceTime.create({
+              data: {
+                serviceDateId: serviceDate.id,
+                startTime: timeSlot.time,
+                duration: durationMinutes,
+                isOutsideNormalHours: timeSlot.isOutsideNormalHours,
+              },
+            })
+          }
+        }
+      }
+
+      // Create a payment record
+      await tx.payment.create({
+        data: {
+          reservationId: newReservation.id,
+          amount: cost,
+          status: "COMPLETED",
+          method: "Card",
+        },
+      })
+
+      return newReservation
+    })
+
+    // Create a legacy reservation record for compatibility
+    const legacyReservation = await prisma.reservations.create({
+      data: {
+        full_name: `${user.name} ${user.surname}`,
+        email: user.email,
+        phone: user.phone || "",
+        address: user.address || "",
+        city: user.city || "",
+        postal_code: user.postalCode || "",
+        service_type: service,
+        total_cost: cost,
+        reservation_data: data,
+        migrated: true, // Mark as already migrated
+        created_at: new Date(), // Add the created_at field with the current date and time
+      },
+    })
+
+    // Send email notification
+    let emailSuccess = true
+    try {
+      // Directly call the email notification function instead of using fetch
+      await sendEmailNotification({
+        reservationId: reservation.id,
+        type: "create",
+      })
+    } catch (emailError) {
+      console.error("Failed to send email notification:", emailError)
+      emailSuccess = false
+      // Don't fail the whole request if email fails
+    }
+
+    // Update calendar
+    let calendarSuccess = true
+    try {
+      // Directly call the calendar update function instead of using fetch
+      await updateCalendar({
+        reservationId: reservation.id,
+        action: "create",
+      })
+    } catch (calendarError) {
+      console.error("Failed to update calendar:", calendarError)
+      calendarSuccess = false
     }
 
     return NextResponse.json({
       success: true,
-      message: "Reservation saved successfully",
-      reservationId,
+      reservation,
+      legacyReservation,
+      emailSuccess,
+      calendarSuccess,
     })
   } catch (error) {
-    console.error("Reservation Error:", error)
-    return NextResponse.json({ error: `Failed to save reservation: ${error.message}` }, { status: 500 })
+    console.error("Error saving reservation:", error)
+    return NextResponse.json(
+      { error: "Failed to save reservation", details: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    )
   }
+}
+
+// Helper function to check if a time is outside normal hours (before 8 AM or after 8 PM)
+function isOutsideNormalHours(timeString: string): boolean {
+  const [hours, minutes] = timeString.split(":").map(Number)
+  return hours < 8 || hours >= 20
+}
+
+// Helper function to check if a date is a weekend or holiday
+function isWeekendOrHoliday(date: Date): boolean {
+  const day = date.getDay()
+  // Check if it's a weekend (0 = Sunday, 6 = Saturday)
+  return day === 0 || day === 6
+  // Note: For a complete implementation, you would also check against holidays
 }

@@ -1,61 +1,82 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { updateCalendar } from "../../calendar/update/route"
 
 export async function PATCH(request: Request) {
   try {
-    const { timeId, dateId, startTime, date, isOutsideNormalHours } = await request.json()
+    const { reservationId, serviceDate, serviceTime } = await request.json()
 
-    if (!timeId || !startTime || !date || !dateId) {
+    if (!reservationId || !serviceDate || !serviceTime) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // First update the service date
-    const updatedDate = await prisma.serviceDate.update({
+    // Get the service date and time records
+    const serviceDateRecord = await prisma.serviceDate.findFirst({
       where: {
-        id: dateId,
+        id: serviceDate.id,
+        reservationId,
       },
-      data: {
-        date: new Date(date),
-        isSpecialDay: isWeekendOrHoliday(new Date(date)),
+      include: {
+        serviceTimes: true,
       },
     })
 
-    // Then update the service time
-    const updatedTime = await prisma.serviceTime.update({
+    if (!serviceDateRecord) {
+      return NextResponse.json({ error: "Service date not found" }, { status: 404 })
+    }
+
+    // Update the service date
+    await prisma.serviceDate.update({
       where: {
-        id: timeId,
+        id: serviceDate.id,
       },
       data: {
-        startTime,
-        isOutsideNormalHours,
+        date: new Date(serviceDate.date),
+        isSpecialDay: serviceDate.isSpecialDay,
       },
     })
 
-    // Get the reservation ID for the notification
-    const serviceDate = await prisma.serviceDate.findUnique({
-      where: { id: dateId },
-      select: { reservationId: true },
-    })
+    // Update the service time
+    if (serviceDateRecord.serviceTimes.length > 0 && serviceTime.id) {
+      await prisma.serviceTime.update({
+        where: {
+          id: serviceTime.id,
+        },
+        data: {
+          startTime: serviceTime.startTime,
+          duration: serviceTime.duration,
+          isOutsideNormalHours: serviceTime.isOutsideNormalHours,
+        },
+      })
+    }
+
+    // Update calendar event
+    try {
+      await updateCalendar({
+        reservationId,
+        action: "update",
+        testMode: true,
+      })
+    } catch (calendarError) {
+      console.error("Failed to update calendar event:", calendarError)
+      // Don't fail the whole request if calendar update fails
+    }
 
     return NextResponse.json({
       success: true,
-      updatedDate,
-      updatedTime,
-      reservationId: serviceDate?.reservationId,
+      message: "Service date and time updated successfully",
     })
   } catch (error) {
-    console.error("Error updating service time:", error)
+    console.error("Error updating service date and time:", error)
     return NextResponse.json(
-      { error: "Failed to update service time", details: error instanceof Error ? error.message : String(error) },
+      {
+        error: "Failed to update service date and time",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 },
     )
   }
 }
 
-// Helper function to check if a date is a weekend or holiday
-function isWeekendOrHoliday(date: Date): boolean {
-  const day = date.getDay()
-  // Check if it's a weekend (0 = Sunday, 6 = Saturday)
-  return day === 0 || day === 6
-  // Note: For a complete implementation, you would also check against holidays
-}
+// Also support POST for backward compatibility
+export { PATCH as POST }
