@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TimePickerInput } from "@/components/time-picker-input"
 import { Badge } from "@/components/ui/badge"
@@ -27,12 +26,15 @@ import {
   Moon,
   Sunrise,
   Loader2,
+  Download,
 } from "lucide-react"
 import { format, isWeekend, differenceInDays } from "date-fns"
 import { CostBreakdown } from "@/components/cost-breakdown"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { calculateDistance } from "@/lib/distance-calculator"
+import { MultiTimeSelector } from "@/components/multi-time-selector"
+import { ChatWidget } from "@/components/chat-widget"
 
 const SERVICE_TYPES = ["Nocleg", "Spacer", "Wyzyta Domowa"]
 const POLISH_HOLIDAYS_2025 = [
@@ -55,11 +57,12 @@ const POLISH_HOLIDAYS_2025 = [
 const PRICES = {
   Nocleg: {
     basePrice: 91, // 40 zł for 30 min (1st animal)
+    additionalTime: 0,
     weekendHoliday: 101,
     additionalAnimal: 61, // 20 zł for 2nd animal
     timeSurcharge: 10, // Before 8 AM/after 8 PM
     basePriceCat: 71,
-    additionalCat: 39
+    additionalCat: 39,
   },
   "Wyzyta Domowa": {
     basePrice: 45, // 40 zł for 30 min (1st animal)
@@ -68,15 +71,30 @@ const PRICES = {
     additionalAnimal: 25, // 20 zł for 2nd animal
     timeSurcharge: 10, // Before 8 AM/after 8 PM
     basePriceCat: 40,
-    additionalCat: 15
+    additionalCat: 15,
   },
   Spacer: {
     basePrice: 41, // 40 zł for 30 min (1st animal)
     additionalTime: 21,
     weekendHoliday: 52,
     additionalAnimal: 21, // 20 zł for 2nd animal
-    timeSurcharge: 10 // Before 8 AM/after 8 PM
+    timeSurcharge: 10, // Before 8 AM/after 8 PM
+    basePriceCat: 20,
+    additionalCat: 10,
   },
+}
+
+interface TimeSlot {
+  id: string
+  time: string
+  isOutsideNormalHours: boolean
+  duration: string
+}
+
+interface DateWithTimes {
+  date: Date
+  times: TimeSlot[]
+  isSpecialDay: boolean
 }
 
 export default function ReservationPage() {
@@ -109,7 +127,9 @@ export default function ReservationPage() {
   const [dropoffTime, setDropoffTime] = useState("12:00")
   const [walkDuration, setWalkDuration] = useState("30 minutes")
   const [customDuration, setCustomDuration] = useState("45")
-  const [walkTime, setWalkTime] = useState("12:00")
+
+  // New state for multiple time slots per day
+  const [datesWithTimes, setDatesWithTimes] = useState<DateWithTimes[]>([])
 
   // UI state
   const [isUserRegistered, setIsUserRegistered] = useState(false)
@@ -118,6 +138,8 @@ export default function ReservationPage() {
   const [activeTab, setActiveTab] = useState("user-info")
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
   const [distanceError, setDistanceError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   // Language
   const [language, setLanguage] = useState<"en" | "pl">("en")
@@ -159,6 +181,37 @@ export default function ReservationPage() {
     }
   }, [userInfo.address, userInfo.city, userInfo.postalCode, selectedService])
 
+  // Initialize dates with times when selected dates change
+  useEffect(() => {
+    if (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") {
+      // Create or update datesWithTimes based on selectedDates
+      const updatedDatesWithTimes = selectedDates.map((date) => {
+        // Check if this date already exists in datesWithTimes
+        const existingDateWithTimes = datesWithTimes.find((item) => isSameDay(item.date, date))
+
+        if (existingDateWithTimes) {
+          return existingDateWithTimes
+        }
+
+        // Create new entry with default time
+        return {
+          date,
+          times: [
+            {
+              id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+              time: "12:00",
+              isOutsideNormalHours: isOutsideNormalHours("12:00"),
+              duration: "30 minutes",
+            },
+          ],
+          isSpecialDay: isSpecialDay(date),
+        }
+      })
+
+      setDatesWithTimes(updatedDatesWithTimes)
+    }
+  }, [selectedDates, selectedService])
+
   // Toggle user registration status
   const toggleUserRegistration = () => {
     setIsUserRegistered(!isUserRegistered)
@@ -196,6 +249,8 @@ export default function ReservationPage() {
   }
 
   const saveSettings = () => {
+    setIsSaving(true)
+
     // Create a profile object with user info and pets
     const profile = {
       ...userInfo,
@@ -219,25 +274,35 @@ export default function ReservationPage() {
     localStorage.setItem("pet-profiles", JSON.stringify(existingProfiles))
     setSavedProfiles(existingProfiles)
 
-    alert("Settings saved successfully!")
+    // Simulate API call
+    setTimeout(() => {
+      setIsSaving(false)
+      alert("Settings saved successfully!")
+    }, 800)
   }
 
   const loadSettings = (profileIndex: number) => {
-    const profile = savedProfiles[profileIndex]
-    if (profile) {
-      setUserInfo({
-        name: profile.name || "",
-        surname: profile.surname || "",
-        phone: profile.phone || "",
-        email: profile.email || "",
-        address: profile.address || "",
-        city: profile.city || "",
-        postalCode: profile.postalCode || "",
-      })
+    setIsLoading(true)
 
-      setPets(profile.pets || [])
-      setSelectedProfileIndex(profileIndex)
-    }
+    // Simulate API call
+    setTimeout(() => {
+      const profile = savedProfiles[profileIndex]
+      if (profile) {
+        setUserInfo({
+          name: profile.name || "",
+          surname: profile.surname || "",
+          phone: profile.phone || "",
+          email: profile.email || "",
+          address: profile.address || "",
+          city: profile.city || "",
+          postalCode: profile.postalCode || "",
+        })
+
+        setPets(profile.pets || [])
+        setSelectedProfileIndex(profileIndex)
+      }
+      setIsLoading(false)
+    }, 600)
   }
 
   const deleteProfile = (profileIndex: number) => {
@@ -267,6 +332,15 @@ export default function ReservationPage() {
     }
   }
 
+  // Helper function to check if two dates are the same day
+  const isSameDay = (date1: Date, date2: Date) => {
+    return (
+      date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate()
+    )
+  }
+
   // Check if a date is a weekend or holiday
   const isSpecialDay = (date: Date) => {
     // Check if it's a weekend
@@ -281,6 +355,15 @@ export default function ReservationPage() {
   const isOutsideNormalHours = (timeString: string) => {
     const [hours, minutes] = timeString.split(":").map(Number)
     return hours < 8 || hours >= 20
+  }
+
+  // Handle time slot changes for a specific date
+  const handleTimeSlotChange = (date: Date, newTimes: TimeSlot[]) => {
+    setDatesWithTimes((prevDates) =>
+      prevDates.map((dateWithTimes) =>
+        isSameDay(dateWithTimes.date, date) ? { ...dateWithTimes, times: newTimes } : dateWithTimes,
+      ),
+    )
   }
 
   // Calculate the total cost
@@ -299,10 +382,10 @@ export default function ReservationPage() {
 
     const servicePrice = PRICES[selectedService as keyof typeof PRICES]
 
-    const nights = differenceInDays(endDate, startDate)
-
     // Calculate base cost based on service type
     if (selectedService === "Nocleg" && startDate && endDate) {
+      const nights = differenceInDays(endDate, startDate)
+
       // Check for weekend/holiday surcharge
       let specialDayCount = 0
       const currentDate = new Date(startDate)
@@ -315,12 +398,24 @@ export default function ReservationPage() {
       }
 
       // Base cost for first pet
-      const baseCost = ((nights - specialDayCount) * servicePrice.basePrice) + (specialDayCount * servicePrice.weekendHoliday)
-      totalCost += baseCost
-      breakdown.push({
-        description: `${nights} night(s) for first pet`,
-        amount: baseCost,
-      })
+      const baseCost = (nights - specialDayCount) * servicePrice.basePrice
+      if (baseCost > 0) {
+        totalCost += baseCost
+        breakdown.push({
+          description: `${nights - specialDayCount} night(s) for first pet on regular days`,
+          amount: baseCost,
+        })
+      }
+
+      // Weekends/holidays price for first pet
+      const specialDayCost = specialDayCount * servicePrice.weekendHoliday
+      if (specialDayCost > 0) {
+        totalCost += specialDayCost
+        breakdown.push({
+          description: `${specialDayCount} night(s) for first pet on weekend/holiday`,
+          amount: specialDayCost,
+        })
+      }
 
       // Additional pets
       if (pets.length > 1) {
@@ -348,54 +443,141 @@ export default function ReservationPage() {
           amount: servicePrice.timeSurcharge,
         })
       }
-    } else if ((selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && selectedDates.length > 0) {
-      // Calculate duration multiplier
-      let durationMultiplier = 1
+    } else if ((selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && datesWithTimes.length > 0) {
+      // Calculate cost for each time slot based on its duration
+      let totalRegularCost = 0
+      let totalSpecialCost = 0
+      let totalSpecialCostAdditionalPet = 0
+      let totalRegularCostAdditionalPet = 0
+      let totalDurationMultiplier = 0
+      let regularDayDurationMultiplier = 0
+      let specialDayDurationMultiplier = 0
 
-      if (walkDuration === "1 hour") {
-        durationMultiplier = 2
-      } else if (walkDuration === "1.5 hours") {
-        durationMultiplier = 3
-      } else if (walkDuration === "2 hours") {
-        durationMultiplier = 4
-      } else if (walkDuration === "custom") {
-        durationMultiplier = Number(customDuration) / 30
-      }
+      datesWithTimes.forEach((dateWithTimes) => {
+        const isSpecial = dateWithTimes.isSpecialDay
 
-      // Check for weekend/holiday surcharge
-      let specialDayCount = 0
+        dateWithTimes.times.forEach((timeSlot) => {
+          let slotDurationMultiplier = 1
+          if (timeSlot.duration === "1 hour") {
+            slotDurationMultiplier = 2
+          } else if (timeSlot.duration === "1.5 hours") {
+            slotDurationMultiplier = 3
+          } else if (timeSlot.duration === "2 hours") {
+            slotDurationMultiplier = 4
+          } else if (timeSlot.duration === "2.5 hours") {
+            slotDurationMultiplier = 5
+          } else if (timeSlot.duration === "3 hours") {
+            slotDurationMultiplier = 6
+          } else if (timeSlot.duration === "3.5 hours") {
+            slotDurationMultiplier = 7
+          } else if (timeSlot.duration === "4 hours") {
+            slotDurationMultiplier = 8
+          } else if (timeSlot.duration === "4.5 hours") {
+            slotDurationMultiplier = 9
+          } else if (timeSlot.duration === "5 hours") {
+            slotDurationMultiplier = 10
+          } else if (timeSlot.duration === "5.5 hours") {
+            slotDurationMultiplier = 11
+          } else if (timeSlot.duration === "6 hours") {
+            slotDurationMultiplier = 12
+          } else if (timeSlot.duration === "6.5 hours") {
+            slotDurationMultiplier = 13
+          } else if (timeSlot.duration === "7 hours") {
+            slotDurationMultiplier = 14
+          } else if (timeSlot.duration === "7.5 hours") {
+            slotDurationMultiplier = 15
+          } else if (timeSlot.duration === "8 hours") {
+            slotDurationMultiplier = 16
+          }
 
-      for (const date of selectedDates) {
-        if (isSpecialDay(date)) {
-          specialDayCount++
-        }
-      }
+          totalDurationMultiplier += slotDurationMultiplier
 
-      // Base cost for first pet
-      const baseCost = (((selectedDates.length - specialDayCount) * servicePrice.basePrice) + (specialDayCount * servicePrice.weekendHoliday)) * durationMultiplier
-      totalCost += baseCost
-      breakdown.push({
-        description: `${selectedDates.length} day(s) of ${walkDuration} for first pet`,
-        amount: baseCost,
+          if (isSpecial) {
+            totalSpecialCost += servicePrice.weekendHoliday * slotDurationMultiplier
+            totalSpecialCostAdditionalPet +=
+              servicePrice.additionalAnimal * 1.2 * slotDurationMultiplier * (pets.length - 1)
+            specialDayDurationMultiplier += slotDurationMultiplier
+          } else {
+            totalRegularCost += servicePrice.basePrice * slotDurationMultiplier
+            totalRegularCostAdditionalPet += servicePrice.additionalAnimal * slotDurationMultiplier * (pets.length - 1)
+            regularDayDurationMultiplier += slotDurationMultiplier
+          }
+        })
       })
 
-      // Additional pets
-      if (pets.length > 1) {
-        const additionalPetsCost =
-          selectedDates.length * servicePrice.additionalAnimal * durationMultiplier * (pets.length - 1)
-        totalCost += additionalPetsCost
+      // Base cost for first pet
+      if (totalRegularCost > 0) {
+        totalCost += totalRegularCost
         breakdown.push({
-          description: `${selectedDates.length} day(s) of ${walkDuration} for ${pets.length - 1} additional pet(s)`,
-          amount: additionalPetsCost,
+          description: `30 min for 1 pet: ${regularDayDurationMultiplier}*${servicePrice.basePrice.toFixed(2)} zł`,
+          amount: totalRegularCost,
         })
       }
 
-      // Check for time surcharges
-      if (isOutsideNormalHours(walkTime)) {
-        const timeSurcharge = servicePrice.timeSurcharge * selectedDates.length
+      // Special cost for first pet
+      if (totalSpecialCost > 0) {
+        totalCost += totalSpecialCost
+        breakdown.push({
+          description: `30 min for 1 pet on Weekend/Holiday : ${specialDayDurationMultiplier}*${servicePrice.weekendHoliday.toFixed(2)} zł`,
+          amount: totalSpecialCost,
+        })
+      }
+
+      // Additional pets
+      if (pets.length > 1) {
+        // Count regular and special days
+        let regularDayCount = 0
+        let specialDayCount = 0
+
+        // Count total time slots and outside normal hours slots
+        let totalTimeSlots = 0
+        let outsideHoursTimeSlots = 0
+
+        datesWithTimes.forEach((dateWithTimes) => {
+          if (dateWithTimes.isSpecialDay) {
+            specialDayCount++
+          } else {
+            regularDayCount++
+          }
+
+          totalTimeSlots += dateWithTimes.times.length
+          outsideHoursTimeSlots += dateWithTimes.times.filter((t) => t.isOutsideNormalHours).length
+        })
+
+        // Regular days
+        if (regularDayCount > 0) {
+          totalCost += totalRegularCostAdditionalPet
+          breakdown.push({
+            description: `${pets.length - 1} additional pet(s) for ${regularDayCount} day(s): ${pets.length - 1}*${regularDayDurationMultiplier}*${servicePrice.additionalAnimal.toFixed(2)} zł`,
+            amount: totalRegularCostAdditionalPet,
+          })
+        }
+
+        // Special days
+        if (specialDayCount > 0) {
+          totalCost += totalSpecialCostAdditionalPet
+          breakdown.push({
+            description: `${pets.length - 1} additional pet(s) for ${specialDayCount} weekend/holiday(s): ${pets.length - 1}*${specialDayDurationMultiplier}*${servicePrice.additionalAnimal * (1.2).toFixed(2)} zł`,
+            amount: totalSpecialCostAdditionalPet,
+          })
+        }
+      }
+
+      // Time surcharges for outside normal hours
+      // Count total time slots and outside normal hours slots
+      let totalTimeSlots = 0
+      let outsideHoursTimeSlots = 0
+
+      datesWithTimes.forEach((dateWithTimes) => {
+        totalTimeSlots += dateWithTimes.times.length
+        outsideHoursTimeSlots += dateWithTimes.times.filter((t) => t.isOutsideNormalHours).length
+      })
+
+      if (outsideHoursTimeSlots > 0) {
+        const timeSurcharge = servicePrice.timeSurcharge * outsideHoursTimeSlots
         totalCost += timeSurcharge
         breakdown.push({
-          description: `Surcharge for service outside 8 AM - 8 PM (${selectedDates.length} day(s))`,
+          description: `Surcharge for ${outsideHoursTimeSlots} time slot(s) outside 8 AM - 8 PM`,
           amount: timeSurcharge,
         })
       }
@@ -403,10 +585,10 @@ export default function ReservationPage() {
       // Distance surcharge
       if (distance && distance > 5) {
         const extraDistance = distance - 5
-        const distanceSurcharge = extraDistance * 1.5 * selectedDates.length
+        const distanceSurcharge = extraDistance * 1.5 * totalTimeSlots
         totalCost += distanceSurcharge
         breakdown.push({
-          description: `Distance surcharge for ${extraDistance.toFixed(1)} km beyond 5 km (${selectedDates.length} day(s))`,
+          description: `Distance surcharge for ${extraDistance.toFixed(1)} km (${totalTimeSlots} visit(s))`,
           amount: distanceSurcharge,
         })
       }
@@ -419,15 +601,15 @@ export default function ReservationPage() {
     startDate,
     endDate,
     selectedDates,
+    datesWithTimes,
     walkDuration,
     customDuration,
     dropoffTime,
     pickupTime,
-    walkTime,
     distance,
   ])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormSubmitted(true)
 
@@ -455,6 +637,15 @@ export default function ReservationPage() {
       return
     }
 
+    // Check if all dates have at least one time slot
+    if (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") {
+      const datesMissingTimes = datesWithTimes.filter((d) => d.times.length === 0)
+      if (datesMissingTimes.length > 0) {
+        alert(`Please add at least one time slot for each selected date`)
+        return
+      }
+    }
+
     // Prepare reservation data
     const reservationData = {
       userInfo: isUserRegistered ? { registered: true } : userInfo,
@@ -462,19 +653,65 @@ export default function ReservationPage() {
       service: selectedService,
       dates:
         selectedService === "Nocleg"
-          ? { startDate, endDate, pickupTime, dropoffTime }
+          ? {
+              startDate: startDate ? format(startDate, "yyyy-MM-dd") : null,
+              endDate: endDate ? format(endDate, "yyyy-MM-dd") : null,
+              pickupTime,
+              dropoffTime,
+            }
           : {
-              selectedDates,
-              walkTime,
-              walkDuration: walkDuration === "custom" ? `${customDuration} minutes` : walkDuration,
+              datesWithTimes: datesWithTimes.map((dateWithTime) => ({
+                ...dateWithTime,
+                date: format(dateWithTime.date, "yyyy-MM-dd"),
+              })),
             },
       cost: calculateCost.totalCost,
     }
 
-    console.log("Reservation data:", reservationData)
-    // Here you would send this data to your backend
+    try {
+      // Show loading state
+      setIsSaving(true)
 
-    alert("Reservation submitted successfully!")
+      // Send data to API
+      const response = await fetch("/api/reservations/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reservationData),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to save reservation")
+      }
+
+      // Success - with a note if calendar failed
+      if (result.calendarSuccess === false) {
+        alert(
+          "Reservation submitted successfully! Your booking has been saved to our database, but could not be added to our calendar. Our staff will handle this manually.",
+        )
+      } else {
+        alert("Reservation submitted successfully! Your booking has been added to our calendar.")
+      }
+
+      // Store the user's email in localStorage for the bookings page
+      if (userInfo.email) {
+        localStorage.setItem("userEmail", userInfo.email)
+      }
+
+      // Redirect to the bookings page
+      window.location.href = "/bookings"
+
+      // Reset form or redirect to confirmation page
+      // You could add code here to reset the form or redirect
+    } catch (error) {
+      console.error("Error saving reservation:", error)
+      alert(`Failed to submit reservation: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleTabChange = (value: string) => {
@@ -507,13 +744,20 @@ export default function ReservationPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center">
+          <DollarSign size={20} className="text-[#C76E00] mr-2" />
+          <div className="text-lg font-medium">
+            Total Cost: <span className="text-[#C76E00]">{calculateCost.totalCost.toFixed(2)} zł</span>
+          </div>
+        </div>
+
         <div className="inline-flex rounded-md shadow-sm" role="group">
           <button
             type="button"
             onClick={() => setLanguage("en")}
             className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-              language === "en" ? "bg-orange-600 text-white" : "bg-white text-gray-900 hover:bg-gray-100"
+              language === "en" ? "bg-[#C76E00] text-white" : "bg-white text-gray-900 hover:bg-gray-100"
             }`}
           >
             EN
@@ -522,15 +766,16 @@ export default function ReservationPage() {
             type="button"
             onClick={() => setLanguage("pl")}
             className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-              language === "pl" ? "bg-orange-600 text-white" : "bg-white text-gray-900 hover:bg-gray-100"
+              language === "pl" ? "bg-[#C76E00] text-white" : "bg-white text-gray-900 hover:bg-gray-100"
             }`}
           >
             PL
           </button>
         </div>
       </div>
+
       <Card className="w-full max-w-4xl mx-auto shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
+        <CardHeader className="bg-gradient-to-r from-[#C76E00] to-[#a85b00] text-white rounded-t-lg">
           <CardTitle className="text-2xl font-bold">Dog Hotel Reservation</CardTitle>
           <CardDescription className="text-orange-100">Book a stay or service for your furry friend</CardDescription>
         </CardHeader>
@@ -644,9 +889,44 @@ export default function ReservationPage() {
                 <div className="flex justify-between items-center pt-4">
                   <h3 className="text-lg font-medium">Saved Profiles</h3>
                   <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={saveSettings} className="flex items-center gap-2">
-                      <Save size={16} />
-                      Save Profile
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={saveSettings}
+                      className="flex items-center gap-2"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          Save Profile
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => loadSettings(selectedProfileIndex || 0)}
+                      className="flex items-center gap-2"
+                      disabled={isLoading || savedProfiles.length === 0 || selectedProfileIndex === null}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Download size={16} />
+                          Load Profile
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -777,19 +1057,34 @@ export default function ReservationPage() {
 
                 {pets.length > 0 && (
                   <div className="flex justify-end pt-4 mb-4">
-                    <Button type="button" variant="outline" onClick={saveSettings} className="flex items-center gap-2">
-                      <Save size={16} />
-                      Save Profile
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={saveSettings}
+                      className="flex items-center gap-2"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          Save Profile
+                        </>
+                      )}
                     </Button>
                   </div>
                 )}
 
                 <div className="flex justify-between pt-4">
                   <Button type="button" variant="outline" onClick={() => setActiveTab("user-info")}>
-                    Back to Your Information
+                    Back to Info
                   </Button>
                   <Button type="button" onClick={() => setActiveTab("service")}>
-                    Continue to Service & Dates
+                    Continue to Service
                   </Button>
                 </div>
               </div>
@@ -808,6 +1103,7 @@ export default function ReservationPage() {
                       setSelectedDates([])
                       setStartDate(null)
                       setEndDate(null)
+                      setDatesWithTimes([])
                     }}
                     className="flex flex-col sm:flex-row gap-4"
                   >
@@ -975,7 +1271,7 @@ export default function ReservationPage() {
                                           variant="outline"
                                           className="bg-amber-50 text-amber-700 border-amber-200"
                                         >
-                                          +30 zł
+                                          +10 zł
                                         </Badge>
                                       </TooltipTrigger>
                                       <TooltipContent>
@@ -999,7 +1295,7 @@ export default function ReservationPage() {
                                           variant="outline"
                                           className="bg-amber-50 text-amber-700 border-amber-200"
                                         >
-                                          +30 zł
+                                          +10 zł
                                         </Badge>
                                       </TooltipTrigger>
                                       <TooltipContent>
@@ -1036,87 +1332,27 @@ export default function ReservationPage() {
                         <div className="space-y-4">
                           {selectedDates.length > 0 && (
                             <div className="p-4 bg-muted rounded-lg">
-                              <h4 className="font-medium mb-2">Selected Dates</h4>
-                              <ScrollArea className="h-[150px] pr-4">
-                                {[...selectedDates]
-                                  .sort((a, b) => a.getTime() - b.getTime())
-                                  .map((date, index) => (
-                                    <p
-                                      key={index}
-                                      className="text-sm py-1 border-b border-border last:border-0 flex items-center justify-between"
-                                    >
-                                      <span>{format(date, "PPP")}</span>
-                                      {isSpecialDay(date) && (
-                                        <Badge
-                                          variant="outline"
-                                          className="bg-amber-50 text-amber-700 border-amber-200"
-                                        >
-                                          Weekend/holiday price
-                                        </Badge>
-                                      )}
-                                    </p>
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium">Selected Dates & Times</h4>
+                                <Badge>{selectedDates.length} day(s)</Badge>
+                              </div>
+
+                              <ScrollArea className="h-[250px] pr-4">
+                                <div className="space-y-3">
+                                  {datesWithTimes.map((dateWithTimes) => (
+                                    <MultiTimeSelector
+                                      key={dateWithTimes.date.toISOString()}
+                                      date={dateWithTimes.date}
+                                      times={dateWithTimes.times}
+                                      onChange={handleTimeSlotChange}
+                                      isOutsideNormalHours={isOutsideNormalHours}
+                                      surchargeAmount={selectedService === "Spacer" ? 20 : 40}
+                                    />
                                   ))}
+                                </div>
                               </ScrollArea>
-                              <p className="text-sm mt-2 font-medium">Total: {selectedDates.length} day(s)</p>
                             </div>
                           )}
-
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="walk-time" className="flex items-center justify-between">
-                                Time
-                                {isOutsideNormalHours(walkTime) && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge
-                                          variant="outline"
-                                          className="bg-amber-50 text-amber-700 border-amber-200"
-                                        >
-                                          +{selectedService === "Spacer" ? "20" : "40"} zł per day
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p className="text-xs">Surcharge for times before 8 AM or after 8 PM</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                )}
-                              </Label>
-                              <TimePickerInput id="walk-time" value={walkTime} onChange={setWalkTime} />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="duration">Duration</Label>
-                              <Select value={walkDuration} onValueChange={setWalkDuration}>
-                                <SelectTrigger id="duration" className="w-full">
-                                  <SelectValue placeholder="Select duration" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="30 minutes">30 minutes</SelectItem>
-                                  <SelectItem value="1 hour">1 hour</SelectItem>
-                                  <SelectItem value="1.5 hours">1.5 hours</SelectItem>
-                                  <SelectItem value="2 hours">2 hours</SelectItem>
-                                  <SelectItem value="custom">Custom</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            {walkDuration === "custom" && (
-                              <div className="space-y-2">
-                                <Label htmlFor="custom-duration">Custom Duration (minutes)</Label>
-                                <Input
-                                  id="custom-duration"
-                                  type="number"
-                                  min="15"
-                                  max="240"
-                                  step="15"
-                                  value={customDuration}
-                                  onChange={(e) => setCustomDuration(e.target.value)}
-                                />
-                              </div>
-                            )}
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -1167,18 +1403,43 @@ export default function ReservationPage() {
                         )}
 
                         {(selectedService === "Spacer" || selectedService === "Wyzyta Domowa") &&
-                          selectedDates.length > 0 && (
+                          datesWithTimes.length > 0 && (
                             <>
                               <p>
-                                <span className="font-medium">Dates:</span> {selectedDates.length} day(s)
+                                <span className="font-medium">Dates:</span> {datesWithTimes.length} day(s)
                               </p>
                               <p>
-                                <span className="font-medium">Time:</span> {walkTime}
+                                <span className="font-medium">Duration:</span> Individual per time slot
                               </p>
-                              <p>
-                                <span className="font-medium">Duration:</span>{" "}
-                                {walkDuration === "custom" ? `${customDuration} minutes` : walkDuration}
-                              </p>
+
+                              <div className="mt-2">
+                                <p className="font-medium mb-1">Selected dates:</p>
+                                <ScrollArea className="h-[100px] pr-4">
+                                  {datesWithTimes.map((dateWithTimes) => (
+                                    <div key={dateWithTimes.date.toISOString()} className="mb-2">
+                                      <p className="flex items-center justify-between">
+                                        <span>{format(dateWithTimes.date, "EEE, MMM d")}</span>
+                                        {dateWithTimes.isSpecialDay && (
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-amber-50 text-amber-700 border-amber-200"
+                                          >
+                                            Weekend/holiday price
+                                          </Badge>
+                                        )}
+                                      </p>
+                                      <div className="ml-4 text-xs text-muted-foreground">
+                                        {dateWithTimes.times.map((timeSlot) => (
+                                          <div key={timeSlot.id} className="mb-1">
+                                            {timeSlot.time} ({timeSlot.duration}){timeSlot.isOutsideNormalHours && " *"}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </ScrollArea>
+                              </div>
+
                               {distance !== null && (
                                 <p>
                                   <span className="font-medium">Distance:</span> {distance.toFixed(1)} km
@@ -1224,7 +1485,8 @@ export default function ReservationPage() {
 
                     {/* Special notes about pricing */}
                     <div className="text-xs text-muted-foreground space-y-1">
-                      <p>* Time surcharge: Dropoff/pickup or visit before 8 AM or after 8 PM, +10 zł each time</p>
+                      <p>* Weekend and holiday surcharge: +20%</p>
+                      <p>* Time surcharge: Before 8 AM or after 8 PM</p>
                       {(selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && (
                         <p>* Distance surcharge: +1.5 zł per km beyond 5 km</p>
                       )}
@@ -1233,9 +1495,10 @@ export default function ReservationPage() {
                 </div>
 
                 {/* Special alerts */}
-                {(isOutsideNormalHours(pickupTime) ||
-                  isOutsideNormalHours(dropoffTime) ||
-                  isOutsideNormalHours(walkTime)) && (
+                {((selectedService === "Nocleg" &&
+                  (isOutsideNormalHours(pickupTime) || isOutsideNormalHours(dropoffTime))) ||
+                  ((selectedService === "Spacer" || selectedService === "Wyzyta Domowa") &&
+                    datesWithTimes.some((d) => d.times.some((t) => t.isOutsideNormalHours)))) && (
                   <Alert className="bg-amber-50 border-amber-200">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
                     <AlertTitle className="text-amber-800">Time Surcharge Details</AlertTitle>
@@ -1262,10 +1525,17 @@ export default function ReservationPage() {
 
                 <div className="flex justify-between pt-4">
                   <Button type="button" variant="outline" onClick={() => setActiveTab("service")}>
-                    Back to Service & Dates
+                    Back to Service
                   </Button>
-                  <Button type="submit" className="bg-orange-600 hover:bg-orange-700">
-                    Complete Reservation
+                  <Button type="submit" className="bg-[#C76E00] hover:bg-[#a85b00] text-white" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Saving Reservation...
+                      </>
+                    ) : (
+                      "Complete Reservation"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -1273,6 +1543,9 @@ export default function ReservationPage() {
           </form>
         </Tabs>
       </Card>
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   )
 }

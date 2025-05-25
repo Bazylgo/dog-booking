@@ -27,6 +27,7 @@ model User {
   profiles      PetProfile[]
   reservations  Reservation[]
   messages      Message[]
+  notes         Note[]
 }
 
 enum UserRole {
@@ -83,6 +84,7 @@ model Reservation {
   totalCost         Float
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  legacyId          Int?      // Reference to the original Reservations table
 
   // Relations
   user              User      @relation(fields: [userId], references: [id])
@@ -91,6 +93,7 @@ model Reservation {
   serviceDates      ServiceDate[]
   payments          Payment[]
   notes             Note[]
+  calendarEvents    CalendarEvent[]
 }
 
 enum ReservationStatus {
@@ -138,6 +141,21 @@ model ServiceTime {
 
   // Relations
   serviceDate   ServiceDate @relation(fields: [serviceDateId], references: [id], onDelete: Cascade)
+}
+
+// Calendar events for tracking Google Calendar events
+model CalendarEvent {
+  id            String    @id @default(cuid())
+  reservationId String
+  eventId       String    // Google Calendar event ID
+  eventLink     String    // Link to the event in Google Calendar
+  serviceDateId String?   // Optional link to specific service date
+  serviceTimeId String?   // Optional link to specific service time
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
 }
 
 // Payment model
@@ -201,4 +219,24 @@ model Setting {
   value         String
   description   String?
   updatedAt     DateTime  @updatedAt
+}
+
+// Legacy Reservations table
+model Reservations {
+  id              Int      @id @default(autoincrement())
+  full_name       String
+  email           String   @db.Text
+  phone           String
+  address         String?  @db.Text
+  city            String?  @db.Text
+  postal_code     String?  @db.Text
+  service_type    String
+  total_cost      Decimal  @db.Decimal(10, 2)
+  reservation_data Json    @db.JsonB
+  created_at      DateTime @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+  migrated        Boolean  @default(false) // Track if this record has been migrated
+
+  @@index([email], name: "idx_reservations_email")
+  @@index([created_at], name: "idx_reservations_created_at")
 }

@@ -228,12 +228,12 @@ export default function AdminSettingsPage() {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Admin Settings</h1>
-        <Badge className="bg-orange-600">Admin Access</Badge>
+        <Badge className="bg-[#C76E00]">Admin Access</Badge>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#C76E00]" />
         </div>
       ) : (
         <Tabs defaultValue="services" value={activeTab} onValueChange={setActiveTab}>
@@ -336,7 +336,7 @@ export default function AdminSettingsPage() {
                   <div className="flex justify-end">
                     <Button
                       onClick={handleSaveServices}
-                      className="bg-orange-600 hover:bg-orange-700"
+                      className="bg-[#C76E00] hover:bg-[#a85b00]"
                       disabled={isSaving}
                     >
                       {isSaving ? (
@@ -454,7 +454,7 @@ export default function AdminSettingsPage() {
                     <Button variant="outline" onClick={() => setEditingService(null)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleSaveServiceEdit} className="bg-orange-600 hover:bg-orange-700">
+                    <Button onClick={handleSaveServiceEdit} className="bg-[#C76E00] hover:bg-[#a85b00]">
                       Save Changes
                     </Button>
                   </DialogFooter>
@@ -484,7 +484,7 @@ export default function AdminSettingsPage() {
                     <h3 className="text-lg font-medium">Current Holidays</h3>
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button className="bg-orange-600 hover:bg-orange-700">
+                        <Button className="bg-[#C76E00] hover:bg-[#a85b00]">
                           <Plus size={16} className="mr-2" />
                           Add Holiday
                         </Button>
@@ -523,7 +523,7 @@ export default function AdminSettingsPage() {
                           </Button>
                           <Button
                             onClick={handleAddHoliday}
-                            className="bg-orange-600 hover:bg-orange-700"
+                            className="bg-[#C76E00] hover:bg-[#a85b00]"
                             disabled={isAddingHoliday}
                           >
                             {isAddingHoliday ? (
@@ -563,7 +563,7 @@ export default function AdminSettingsPage() {
                               <TableRow key={holiday.id}>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
-                                    <Calendar size={16} className="text-orange-600" />
+                                    <Calendar size={16} className="text-[#C76E00]" />
                                     {format(new Date(holiday.date), "MMMM d, yyyy")}
                                   </div>
                                 </TableCell>
@@ -645,7 +645,7 @@ export default function AdminSettingsPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button className="bg-orange-600 hover:bg-orange-700">
+                    <Button className="bg-[#C76E00] hover:bg-[#a85b00]">
                       <Save size={16} className="mr-2" />
                       Save Settings
                     </Button>
