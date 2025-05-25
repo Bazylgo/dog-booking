@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { updateCalendar } from "../../calendar/update/route"
+import { updateCalendar } from "../calendar/update/route"
 
 export async function POST(request: Request) {
   try {
