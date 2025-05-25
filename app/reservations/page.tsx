@@ -746,9 +746,9 @@ export default function ReservationPage() {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center">
-          <DollarSign size={20} className="text-orange-600 mr-2" />
+          <DollarSign size={20} className="text-[#C76E00] mr-2" />
           <div className="text-lg font-medium">
-            Total Cost: <span className="text-orange-600">{calculateCost.totalCost.toFixed(2)} zł</span>
+            Total Cost: <span className="text-[#C76E00]">{calculateCost.totalCost.toFixed(2)} zł</span>
           </div>
         </div>
 
@@ -757,7 +757,7 @@ export default function ReservationPage() {
             type="button"
             onClick={() => setLanguage("en")}
             className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-              language === "en" ? "bg-orange-600 text-white" : "bg-white text-gray-900 hover:bg-gray-100"
+              language === "en" ? "bg-[#C76E00] text-white" : "bg-white text-gray-900 hover:bg-gray-100"
             }`}
           >
             EN
@@ -766,7 +766,7 @@ export default function ReservationPage() {
             type="button"
             onClick={() => setLanguage("pl")}
             className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-              language === "pl" ? "bg-orange-600 text-white" : "bg-white text-gray-900 hover:bg-gray-100"
+              language === "pl" ? "bg-[#C76E00] text-white" : "bg-white text-gray-900 hover:bg-gray-100"
             }`}
           >
             PL
@@ -775,7 +775,7 @@ export default function ReservationPage() {
       </div>
 
       <Card className="w-full max-w-4xl mx-auto shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
+        <CardHeader className="bg-gradient-to-r from-[#C76E00] to-[#a85b00] text-white rounded-t-lg">
           <CardTitle className="text-2xl font-bold">Dog Hotel Reservation</CardTitle>
           <CardDescription className="text-orange-100">Book a stay or service for your furry friend</CardDescription>
         </CardHeader>
@@ -1081,10 +1081,10 @@ export default function ReservationPage() {
 
                 <div className="flex justify-between pt-4">
                   <Button type="button" variant="outline" onClick={() => setActiveTab("user-info")}>
-                    Back to Your Information
+                    Back to Info
                   </Button>
                   <Button type="button" onClick={() => setActiveTab("service")}>
-                    Continue to Service & Dates
+                    Continue to Service
                   </Button>
                 </div>
               </div>
@@ -1525,9 +1525,9 @@ export default function ReservationPage() {
 
                 <div className="flex justify-between pt-4">
                   <Button type="button" variant="outline" onClick={() => setActiveTab("service")}>
-                    Back to Service & Dates
+                    Back to Service
                   </Button>
-                  <Button type="submit" className="bg-orange-600 hover:bg-orange-700" disabled={isSaving}>
+                  <Button type="submit" className="bg-[#C76E00] hover:bg-[#a85b00] text-white" disabled={isSaving}>
                     {isSaving ? (
                       <>
                         <Loader2 size={16} className="mr-2 animate-spin" />

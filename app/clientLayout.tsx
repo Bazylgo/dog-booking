@@ -34,14 +34,14 @@ function Navigation({ isMenuOpen, setIsMenuOpen }: { isMenuOpen: boolean; setIsM
 
         {/* Desktop nav */}
         <nav className="hidden md:flex space-x-6 items-center">
-          <Link href="/services" className="hover:text-orange-600">
-            Services
+          <Link href="/bookings" className="hover:text-orange-600">
+            Bookings
           </Link>
           <Link href="/reservations" className="hover:text-orange-600">
             Reservations
           </Link>
-          <Link href="/about" className="hover:text-orange-600">
-            About Us
+          <Link href="/prices" className="hover:text-orange-600">
+            Prices
           </Link>
 
           {/* Language switcher */}
