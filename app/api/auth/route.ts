@@ -1,4 +1,4 @@
-//app/auth/route.ts
+//app/api/auth/route.ts
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { AuthService } from "@/lib/auth-service"
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Update last login timestamp
+    // Update last login timestamp (optional)
     await AuthService.updateLastLogin(user.id)
 
     // Set authentication cookie

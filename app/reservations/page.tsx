@@ -141,9 +141,6 @@ export default function ReservationPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Language
-  const [language, setLanguage] = useState<"en" | "pl">("en")
-
   // Form validation
   const [formSubmitted, setFormSubmitted] = useState(false)
 
@@ -751,27 +748,6 @@ export default function ReservationPage() {
             Total Cost: <span className="text-[#C76E00]">{calculateCost.totalCost.toFixed(2)} zł</span>
           </div>
         </div>
-
-        <div className="inline-flex rounded-md shadow-sm" role="group">
-          <button
-            type="button"
-            onClick={() => setLanguage("en")}
-            className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-              language === "en" ? "bg-[#C76E00] text-white" : "bg-white text-gray-900 hover:bg-gray-100"
-            }`}
-          >
-            EN
-          </button>
-          <button
-            type="button"
-            onClick={() => setLanguage("pl")}
-            className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-              language === "pl" ? "bg-[#C76E00] text-white" : "bg-white text-gray-900 hover:bg-gray-100"
-            }`}
-          >
-            PL
-          </button>
-        </div>
       </div>
 
       <Card className="w-full max-w-4xl mx-auto shadow-lg border-0">
@@ -805,9 +781,6 @@ export default function ReservationPage() {
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-medium">Your Information</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={toggleUserRegistration}>
-                    {isUserRegistered ? "Edit Info" : "I'm registered"}
-                  </Button>
                 </div>
 
                 {showUserForm && (
@@ -905,26 +878,6 @@ export default function ReservationPage() {
                         <>
                           <Save size={16} />
                           Save Profile
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => loadSettings(selectedProfileIndex || 0)}
-                      className="flex items-center gap-2"
-                      disabled={isLoading || savedProfiles.length === 0 || selectedProfileIndex === null}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          <Download size={16} />
-                          Load Profile
                         </>
                       )}
                     </Button>

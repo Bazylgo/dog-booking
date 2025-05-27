@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Menu, X, Settings, User, LogOut, LogIn, Calendar, BookOpen, Home, DollarSign } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Menu, X, User, LogOut, LogIn, Calendar, BookOpen, Home, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,39 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
-// Mock authentication - in a real app, replace with your auth system
-const useAuth = () => {
-  const [user, setUser] = useState<{ email: string; name: string } | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Simulate checking local storage or a cookie for auth state
-    const storedUser = localStorage.getItem("doghotel_user")
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
-    setLoading(false)
-  }, [])
-
-  const login = (email: string, name = "User") => {
-    const newUser = { email, name }
-    localStorage.setItem("doghotel_user", JSON.stringify(newUser))
-    setUser(newUser)
-  }
-
-  const logout = () => {
-    localStorage.removeItem("doghotel_user")
-    setUser(null)
-  }
-
-  return { user, loading, login, logout, isAdmin: user?.email === process.env.EMAIL_HOST }
-}
+import { useAuth } from "@/lib/auth"
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
-  const { user, loading, login, logout, isAdmin } = useAuth()
+  const router = useRouter()
+  const { user, loading, logout, isAdmin } = useAuth()
   const [language, setLanguage] = useState<"en" | "pl">("en")
   const [mounted, setMounted] = useState(false)
 
@@ -52,29 +26,6 @@ export function Header() {
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // For demo purposes - in a real app, remove this
-  useEffect(() => {
-    // This is just for demo purposes to make testing easier
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === "a" && e.altKey) {
-        if (user?.email === "felixgabrielvinte@gmail.com") {
-          logout()
-        } else {
-          login("felixgabrielvinte@gmail.com", "Admin")
-        }
-      } else if (e.key === "u" && e.altKey) {
-        if (user) {
-          logout()
-        } else {
-          login("user@example.com", "Regular User")
-        }
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyPress)
-    return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [user, login, logout])
 
   const closeMenu = () => setIsMenuOpen(false)
 
@@ -90,6 +41,11 @@ export function Header() {
     { href: "/bookings", label: "Bookings", icon: <BookOpen className="h-4 w-4 mr-2" /> },
     { href: "/prices", label: "Prices", icon: <DollarSign className="h-4 w-4 mr-2" /> },
   ]
+
+  // Handle sign in button click
+  const handleSignInClick = () => {
+    router.push("/login")
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md">
@@ -108,12 +64,6 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
-            {/* Render admin link separately with client-side conditional */}
-            {mounted && isAdmin && (
-              <Link href="/admin/settings" className={`flex items-center ${isActive("/admin/settings")}`}>
-                Settings
-              </Link>
-            )}
           </nav>
 
           {/* Language and Auth (Desktop) */}
@@ -167,14 +117,6 @@ export function Header() {
                       <span>Profile</span>
                     </Link>
                   </DropdownMenuItem>
-                  {isAdmin && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin/settings" className="cursor-pointer">
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Settings</span>
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
@@ -187,7 +129,7 @@ export function Header() {
                 variant="default"
                 size="sm"
                 className="bg-[#C76E00] hover:bg-[#a85b00]"
-                onClick={() => login("user@example.com", "Guest User")}
+                onClick={handleSignInClick}
               >
                 <LogIn className="mr-2 h-4 w-4" />
                 Sign in
@@ -234,21 +176,6 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
-              {/* Render admin link separately with client-side conditional */}
-              {mounted && isAdmin && (
-                <Link
-                  href="/admin/settings"
-                  className={`flex items-center p-2 rounded-md ${
-                    mounted && pathname === "/admin/settings"
-                      ? "bg-orange-50 text-orange-600 font-medium"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                  onClick={closeMenu}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </Link>
-              )}
             </nav>
 
             {/* Language Switcher (Mobile) */}
@@ -313,7 +240,7 @@ export function Header() {
                   size="lg"
                   className="w-full bg-[#C76E00] hover:bg-[#a85b00]"
                   onClick={() => {
-                    login("user@example.com", "Guest User")
+                    router.push("/login")
                     closeMenu()
                   }}
                 >
