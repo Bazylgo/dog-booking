@@ -36,7 +36,7 @@ import { calculateDistance } from "@/lib/distance-calculator"
 import { MultiTimeSelector } from "@/components/multi-time-selector"
 import { ChatWidget } from "@/components/chat-widget"
 
-const SERVICE_TYPES = ["Nocleg", "Spacer", "Wyzyta Domowa"]
+const SERVICE_TYPES = ["Nocleg", "Spacer", "Wizyta Domowa"]
 const POLISH_HOLIDAYS_2025 = [
   "2025-01-01", // New Year's Day
   "2025-01-06", // Epiphany
@@ -64,7 +64,7 @@ const PRICES = {
     basePriceCat: 71,
     additionalCat: 39,
   },
-  "Wyzyta Domowa": {
+  "Wizyta Domowa": {
     basePrice: 45, // 40 zł for 30 min (1st animal)
     additionalTime: 20,
     weekendHoliday: 60,
@@ -140,6 +140,7 @@ export default function ReservationPage() {
   const [distanceError, setDistanceError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const isPetTab = activeTab === "pet";
 
   // Form validation
   const [formSubmitted, setFormSubmitted] = useState(false)
@@ -151,7 +152,7 @@ export default function ReservationPage() {
     setDistanceError(null)
 
     if (
-      (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") &&
+      (selectedService === "Spacer" || selectedService === "Wizyta Domowa") &&
       userInfo.address &&
       userInfo.city &&
       userInfo.postalCode
@@ -180,7 +181,7 @@ export default function ReservationPage() {
 
   // Initialize dates with times when selected dates change
   useEffect(() => {
-    if (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") {
+    if (selectedService === "Spacer" || selectedService === "Wizyta Domowa") {
       // Create or update datesWithTimes based on selectedDates
       const updatedDatesWithTimes = selectedDates.map((date) => {
         // Check if this date already exists in datesWithTimes
@@ -440,7 +441,7 @@ export default function ReservationPage() {
           amount: servicePrice.timeSurcharge,
         })
       }
-    } else if ((selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && datesWithTimes.length > 0) {
+    } else if ((selectedService === "Spacer" || selectedService === "Wizyta Domowa") && datesWithTimes.length > 0) {
       // Calculate cost for each time slot based on its duration
       let totalRegularCost = 0
       let totalSpecialCost = 0
@@ -621,13 +622,13 @@ export default function ReservationPage() {
       return
     }
 
-    if ((selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && selectedDates.length === 0) {
+    if ((selectedService === "Spacer" || selectedService === "Wizyta Domowa") && selectedDates.length === 0) {
       alert("Please select at least one date")
       return
     }
 
     if (
-      (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") &&
+      (selectedService === "Spacer" || selectedService === "Wizyta Domowa") &&
       (!userInfo.address || !userInfo.city || !userInfo.postalCode)
     ) {
       alert("Please provide your full address for distance calculation")
@@ -635,7 +636,7 @@ export default function ReservationPage() {
     }
 
     // Check if all dates have at least one time slot
-    if (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") {
+    if (selectedService === "Spacer" || selectedService === "Wizyta Domowa") {
       const datesMissingTimes = datesWithTimes.filter((d) => d.times.length === 0)
       if (datesMissingTimes.length > 0) {
         alert(`Please add at least one time slot for each selected date`)
@@ -866,7 +867,7 @@ export default function ReservationPage() {
                       type="button"
                       variant="outline"
                       onClick={saveSettings}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 over:bg-gray-100"
                       disabled={isSaving}
                     >
                       {isSaving ? (
@@ -1009,27 +1010,32 @@ export default function ReservationPage() {
                 )}
 
                 {pets.length > 0 && (
-                  <div className="flex justify-end pt-4 mb-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={saveSettings}
-                      className="flex items-center gap-2"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save size={16} />
-                          Save Profile
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                  <>
+                    <div className="text-sm text-red-600 mb-2 animate-pulse text-right">
+                      ⚠ Don’t forget to save your profile after editing pet details!
+                    </div>
+                    <div className="flex justify-end pt-4 mb-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={saveSettings}
+                        className={`flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white animate-bounce shadow-lg`}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save size={16} />
+                            Save Profile
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </>
                 )}
 
                 <div className="flex justify-between pt-4">
@@ -1066,7 +1072,7 @@ export default function ReservationPage() {
                         <Label htmlFor={service} className="flex items-center gap-2">
                           {service === "Nocleg" && <Moon size={16} />}
                           {service === "Spacer" && <Sunrise size={16} />}
-                          {service === "Wyzyta Domowa" && <MapPin size={16} />}
+                          {service === "Wizyta Domowa" && <MapPin size={16} />}
                           {service}
                         </Label>
                       </div>
@@ -1088,7 +1094,7 @@ export default function ReservationPage() {
                         We'll pick up your pet for a walk at the scheduled time and return them afterward.
                       </p>
                     )}
-                    {selectedService === "Wyzyta Domowa" && (
+                    {selectedService === "Wizyta Domowa" && (
                       <p className="text-sm text-orange-700">
                         We'll visit your home to take care of your pet at the scheduled time.
                       </p>
@@ -1096,8 +1102,8 @@ export default function ReservationPage() {
                   </div>
                 </div>
 
-                {/* Address confirmation for Spacer and Wyzyta Domowa */}
-                {(selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && (
+                {/* Address confirmation for Spacer and Wizyta Domowa */}
+                {(selectedService === "Spacer" || selectedService === "Wizyta Domowa") && (
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium">Address Confirmation</h3>
                     <div className="bg-muted p-4 rounded-lg">
@@ -1266,7 +1272,7 @@ export default function ReservationPage() {
                     </div>
                   )}
 
-                  {(selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && (
+                  {(selectedService === "Spacer" || selectedService === "Wizyta Domowa") && (
                     <div className="space-y-4">
                       <p className="text-sm text-muted-foreground">
                         Please select multiple dates (they don't have to be consecutive)
@@ -1336,7 +1342,7 @@ export default function ReservationPage() {
                           <span className="font-medium">Service:</span>
                           {selectedService === "Nocleg" && <Moon size={16} />}
                           {selectedService === "Spacer" && <Sunrise size={16} />}
-                          {selectedService === "Wyzyta Domowa" && <MapPin size={16} />}
+                          {selectedService === "Wizyta Domowa" && <MapPin size={16} />}
                           {selectedService}
                         </p>
 
@@ -1355,7 +1361,7 @@ export default function ReservationPage() {
                           </>
                         )}
 
-                        {(selectedService === "Spacer" || selectedService === "Wyzyta Domowa") &&
+                        {(selectedService === "Spacer" || selectedService === "Wizyta Domowa") &&
                           datesWithTimes.length > 0 && (
                             <>
                               <p>
@@ -1440,7 +1446,7 @@ export default function ReservationPage() {
                     <div className="text-xs text-muted-foreground space-y-1">
                       <p>* Weekend and holiday surcharge: +20%</p>
                       <p>* Time surcharge: Before 8 AM or after 8 PM</p>
-                      {(selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && (
+                      {(selectedService === "Spacer" || selectedService === "Wizyta Domowa") && (
                         <p>* Distance surcharge: +1.5 zł per km beyond 5 km</p>
                       )}
                     </div>
@@ -1450,7 +1456,7 @@ export default function ReservationPage() {
                 {/* Special alerts */}
                 {((selectedService === "Nocleg" &&
                   (isOutsideNormalHours(pickupTime) || isOutsideNormalHours(dropoffTime))) ||
-                  ((selectedService === "Spacer" || selectedService === "Wyzyta Domowa") &&
+                  ((selectedService === "Spacer" || selectedService === "Wizyta Domowa") &&
                     datesWithTimes.some((d) => d.times.some((t) => t.isOutsideNormalHours)))) && (
                   <Alert className="bg-amber-50 border-amber-200">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
@@ -1464,7 +1470,7 @@ export default function ReservationPage() {
 
                 {distance !== null &&
                   distance > 5 &&
-                  (selectedService === "Spacer" || selectedService === "Wyzyta Domowa") && (
+                  (selectedService === "Spacer" || selectedService === "Wizyta Domowa") && (
                     <Alert className="bg-amber-50 border-amber-200">
                       <AlertCircle className="h-4 w-4 text-amber-600" />
                       <AlertTitle className="text-amber-800">Distance Surcharge Applied</AlertTitle>
