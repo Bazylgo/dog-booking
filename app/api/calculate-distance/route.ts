@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { ratelimit } from '@/lib/rateLimiter';
 
 // Define the response type for the Distance Matrix API
 interface DistanceMatrixResponse {
@@ -21,6 +22,14 @@ interface DistanceMatrixResponse {
 }
 
 export async function POST(request: Request) {
+  const ip = req.headers.get('x-forwarded-for') || 'anonymous';
+
+  const { success } = await ratelimit.limit(ip);
+
+  if (!success) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   try {
     const { origin, destination } = await request.json()
 
